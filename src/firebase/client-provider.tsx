@@ -21,6 +21,17 @@ function getFirebaseContextValue(): FirebaseContextValue {
   if (firebaseContextValue) {
     return firebaseContextValue;
   }
+  // This check ensures that all necessary environment variables are present
+  // before attempting to initialize Firebase.
+  if (
+    !firebaseConfig.apiKey ||
+    !firebaseConfig.authDomain ||
+    !firebaseConfig.projectId
+  ) {
+    // You can handle this error more gracefully, maybe show a message to the user
+    throw new Error('Firebase configuration is missing. Please check your environment variables.');
+  }
+  
   firebaseContextValue = initializeFirebase(firebaseConfig);
   return firebaseContextValue;
 }

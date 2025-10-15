@@ -26,7 +26,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       router.push('/login');
     }
 
-    if (user && isAuthPage) {
+    if (user && (isAuthPage || pathname === '/')) {
       router.push('/dashboard');
     }
   }, [user, loading, pathname, router, error]);
