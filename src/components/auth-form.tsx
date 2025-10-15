@@ -10,6 +10,7 @@ import {
   signInWithEmailAndPassword,
   updateProfile,
 } from 'firebase/auth';
+import { doc, serverTimestamp, setDoc } from 'firebase/firestore';
 import { Loader2, KeyRound, AtSign } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -31,8 +32,9 @@ import {
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { useAuth } from '@/firebase';
+import { useAuth, useFirestore } from '@/firebase';
 import { Logo } from './logo';
+import { setDocumentNonBlocking } from '@/firebase/non-blocking-updates';
 
 const formSchema = z.object({
   name: z.string().optional(),
@@ -50,6 +52,7 @@ export function AuthForm({ mode }: AuthFormProps) {
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
   const auth = useAuth();
+  const firestore = useFirestore();
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -61,7 +64,7 @@ export function AuthForm({ mode }: AuthFormProps) {
   });
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
-    if (!auth) return;
+    if (!auth || !firestore) return;
     setLoading(true);
     try {
       if (mode === 'signup') {
@@ -75,7 +78,26 @@ export function AuthForm({ mode }: AuthFormProps) {
           values.email,
           values.password
         );
-        await updateProfile(userCredential.user, { displayName: values.name });
+        
+        const user = userCredential.user;
+        
+        // Update Firebase Auth profile
+        await updateProfile(user, { displayName: values.name });
+
+        // Create user document in Firestore
+        const userDocRef = doc(firestore, 'users', user.uid);
+        setDocumentNonBlocking(userDocRef, {
+            uid: user.uid,
+            displayName: values.name,
+            email: values.email,
+            createdAt: serverTimestamp(),
+        }, { merge: true });
+
+        toast({
+            title: 'Account Created!',
+            description: "You've been successfully signed up.",
+        });
+
       } else {
         await signInWithEmailAndPassword(auth, values.email, values.password);
       }
@@ -93,8 +115,14 @@ export function AuthForm({ mode }: AuthFormProps) {
           case 'auth/weak-password':
             errorMessage = 'The password is too weak. Please choose a stronger password.';
             break;
+          case 'auth/user-not-found':
+            errorMessage = 'No account found with this email. Please sign up.';
+            break;
+          case 'auth/wrong-password':
+            errorMessage = 'Incorrect password. Please try again.';
+            break;
           default:
-            errorMessage = error.message;
+            errorMessage = `An unexpected error occurred: ${error.message}`;
             break;
         }
       }

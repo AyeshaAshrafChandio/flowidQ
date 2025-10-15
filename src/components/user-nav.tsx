@@ -13,13 +13,28 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { useAuth, useUser } from '@/firebase';
+import { useAuth, useUser, useFirestore, useDoc, useMemoFirebase } from '@/firebase';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
+import { doc } from 'firebase/firestore';
+
+type UserProfile = {
+  displayName: string;
+  email: string;
+  photoURL?: string;
+};
 
 export function UserNav() {
-  const { user, loading } = useUser();
+  const { user, isUserLoading } = useUser();
   const auth = useAuth();
+  const firestore = useFirestore();
   const avatarImage = PlaceHolderImages.find(img => img.id === 'avatar-1');
+
+  const userDocRef = useMemoFirebase(() => {
+    if (!user || !firestore) return null;
+    return doc(firestore, 'users', user.uid);
+  }, [user, firestore]);
+
+  const { data: userProfile, isLoading: isProfileLoading } = useDoc<UserProfile>(userDocRef);
 
   const handleLogout = async () => {
     if (!auth) return;
@@ -30,8 +45,10 @@ export function UserNav() {
       console.error('Logout failed', error);
     }
   };
+  
+  const isLoading = isUserLoading || isProfileLoading;
 
-  if (loading) {
+  if (isLoading) {
     return <Loader2 className="h-6 w-6 animate-spin" />;
   }
   
@@ -48,26 +65,30 @@ export function UserNav() {
     return name.substring(0, 2);
   };
 
+  const displayName = userProfile?.displayName || user.displayName || 'User';
+  const displayEmail = userProfile?.email || user.email;
+  const displayPhotoUrl = userProfile?.photoURL || user.photoURL || avatarImage?.imageUrl;
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button variant="ghost" className="relative h-10 w-full justify-start gap-2 px-2">
           <Avatar className="h-8 w-8">
-            <AvatarImage src={user.photoURL || avatarImage?.imageUrl} alt={user.displayName || 'User'} />
-            <AvatarFallback>{getInitials(user.displayName)}</AvatarFallback>
+            <AvatarImage src={displayPhotoUrl} alt={displayName} />
+            <AvatarFallback>{getInitials(displayName)}</AvatarFallback>
           </Avatar>
            <div className="flex flex-col items-start truncate group-data-[collapsible=icon]:hidden">
-            <span className="font-medium truncate">{user.displayName || 'User'}</span>
-            <span className="text-xs text-muted-foreground truncate">{user.email}</span>
+            <span className="font-medium truncate">{displayName}</span>
+            <span className="text-xs text-muted-foreground truncate">{displayEmail}</span>
           </div>
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent className="w-56" align="end" forceMount>
         <DropdownMenuLabel className="font-normal">
           <div className="flex flex-col space-y-1">
-            <p className="text-sm font-medium leading-none">{user.displayName}</p>
+            <p className="text-sm font-medium leading-none">{displayName}</p>
             <p className="text-xs leading-none text-muted-foreground">
-              {user.email}
+              {displayEmail}
             </p>
           </div>
         </DropdownMenuLabel>
