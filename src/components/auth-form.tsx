@@ -31,7 +31,7 @@ import {
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { auth } from '@/lib/firebase';
+import { useAuth } from '@/firebase';
 import { Logo } from './logo';
 
 const formSchema = z.object({
@@ -49,6 +49,7 @@ type AuthFormProps = {
 export function AuthForm({ mode }: AuthFormProps) {
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
+  const auth = useAuth();
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -60,6 +61,7 @@ export function AuthForm({ mode }: AuthFormProps) {
   });
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
+    if (!auth) return;
     setLoading(true);
     try {
       if (mode === 'signup') {

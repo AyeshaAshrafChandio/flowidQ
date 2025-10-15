@@ -13,15 +13,16 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { useAuth } from '@/hooks/use-auth';
-import { auth } from '@/lib/firebase';
+import { useAuth, useUser } from '@/firebase';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
 
 export function UserNav() {
-  const { user, loading } = useAuth();
+  const { user, loading } = useUser();
+  const auth = useAuth();
   const avatarImage = PlaceHolderImages.find(img => img.id === 'avatar-1');
 
   const handleLogout = async () => {
+    if (!auth) return;
     try {
       await signOut(auth);
       // Redirect is handled by AuthProvider

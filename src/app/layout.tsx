@@ -3,6 +3,7 @@ import './globals.css';
 import { Toaster } from '@/components/ui/toaster';
 import { AuthProvider } from '@/components/providers/auth-provider';
 import { ThemeProvider } from '@/components/providers/theme-provider';
+import { FirebaseClientProvider } from '@/firebase/client-provider';
 
 export const metadata: Metadata = {
   title: 'SecurePass',
@@ -23,10 +24,12 @@ export default function RootLayout({
       </head>
       <body className="font-body antialiased">
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-          <AuthProvider>
-            {children}
-            <Toaster />
-          </AuthProvider>
+          <FirebaseClientProvider>
+            <AuthProvider>
+              {children}
+              <Toaster />
+            </AuthProvider>
+          </FirebaseClientProvider>
         </ThemeProvider>
       </body>
     </html>

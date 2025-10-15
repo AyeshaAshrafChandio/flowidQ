@@ -31,7 +31,7 @@ import {
   MoreHorizontal,
   File,
 } from 'lucide-react';
-import { useAuth } from '@/hooks/use-auth';
+import { useUser } from '@/firebase';
 import { ChartContainer, ChartTooltipContent } from '@/components/ui/chart';
 import {
   DropdownMenu,
@@ -59,7 +59,7 @@ const recentDocuments = [
 ];
 
 export default function DashboardPage() {
-  const { user } = useAuth();
+  const { user } = useUser();
 
   return (
     <div className="flex-1 space-y-8 p-4 md:p-8">
