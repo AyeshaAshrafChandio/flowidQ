@@ -81,10 +81,27 @@ export function AuthForm({ mode }: AuthFormProps) {
       }
       // Redirect is handled by AuthProvider
     } catch (error: any) {
+      let errorMessage = 'An unexpected error occurred.';
+      if (error.code) {
+        switch (error.code) {
+          case 'auth/invalid-credential':
+             errorMessage = 'Invalid email or password. Please try again.';
+             break;
+          case 'auth/email-already-in-use':
+            errorMessage = 'This email is already in use. Please log in.';
+            break;
+          case 'auth/weak-password':
+            errorMessage = 'The password is too weak. Please choose a stronger password.';
+            break;
+          default:
+            errorMessage = error.message;
+            break;
+        }
+      }
       toast({
         variant: 'destructive',
         title: 'Authentication Failed',
-        description: error.message,
+        description: errorMessage,
       });
     } finally {
       setLoading(false);
