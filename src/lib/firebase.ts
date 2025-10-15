@@ -14,22 +14,29 @@ const firebaseConfig: FirebaseOptions = {
 
 // Initialize Firebase
 let app;
+// Check if Firebase is already initialized
 if (getApps().length === 0) {
+  // Check that the config has been populated
   if (firebaseConfig.apiKey) {
     app = initializeApp(firebaseConfig);
   } else {
-    console.error("Firebase config is missing. Please check your environment variables.");
+    // This will happen on the server-side, and is expected.
+    // The client will have the env vars.
+    // You can add a log here for debugging if you want.
+    // console.log("Firebase config is missing. This is expected on the server.");
   }
 } else {
+  // If already initialized, get the app
   app = getApp();
 }
 
-
+// We need to be careful here because app might be undefined on the server.
 const auth = app ? getAuth(app) : null;
 const db = app ? getFirestore(app) : null;
 
-if (!auth && process.env.NODE_ENV !== 'test') {
-    console.error("Firebase Auth could not be initialized. Please check your configuration.");
+// This check is for client-side debugging, it shouldn't log on the server.
+if (typeof window !== 'undefined' && !auth && process.env.NODE_ENV !== 'test') {
+    console.error("Firebase Auth could not be initialized on the client. Please check your configuration.");
 }
 
 
