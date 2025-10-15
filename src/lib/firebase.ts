@@ -15,8 +15,18 @@ const firebaseConfig = {
 };
 
 // Initialize Firebase
-const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
-const auth = getAuth(app);
-const db = getFirestore(app);
+let app;
+if (!getApps().length) {
+  if (Object.values(firebaseConfig).every(value => !!value)) {
+    app = initializeApp(firebaseConfig);
+  } else {
+    console.error("Firebase config is missing. Please check your .env.local file.");
+  }
+} else {
+  app = getApp();
+}
+
+const auth = app ? getAuth(app) : null;
+const db = app ? getFirestore(app) : null;
 
 export { app, auth, db };
