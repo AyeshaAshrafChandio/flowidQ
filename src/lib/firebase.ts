@@ -20,7 +20,7 @@ if (!getApps().length) {
   if (Object.values(firebaseConfig).every(value => !!value)) {
     app = initializeApp(firebaseConfig);
   } else {
-    console.error("Firebase config is missing. Please check your .env.local file.");
+    console.error("Firebase config is missing. Please check your environment variables.");
   }
 } else {
   app = getApp();
@@ -28,5 +28,10 @@ if (!getApps().length) {
 
 const auth = app ? getAuth(app) : null;
 const db = app ? getFirestore(app) : null;
+
+if (!auth) {
+    console.error("Firebase Auth could not be initialized. Please check your configuration.");
+}
+
 
 export { app, auth, db };
