@@ -19,6 +19,7 @@ export default function QueuesPage() {
   const firestore = useFirestore();
 
   const [isJoining, setIsJoining] = useState<string | null>(null);
+  const [userJoinedQueueIds, setUserJoinedQueueIds] = useState<string[]>([]);
 
   const queuesQuery = useMemoFirebase(() => {
     if (!firestore) return null;
@@ -27,27 +28,35 @@ export default function QueuesPage() {
 
   const { data: queues, isLoading: isLoadingQueues } = useCollection(queuesQuery);
 
-  const userQueuesQuery = useMemoFirebase(() => {
-    if (!firestore || !user) return null;
-    // Query for queue entries where the user is waiting
-    return query(
-      collection(firestore, 'users', user.uid, 'queueEntries'), 
-      where('status', '==', 'waiting')
-    );
-  }, [firestore, user]);
-
-  const { data: userQueueEntries } = useCollection(userQueuesQuery);
-
-  const userJoinedQueueIds = useMemoFirebase(() => {
-    return userQueueEntries?.map(entry => entry.queueId) || [];
-  }, [userQueueEntries]);
-
-
   useEffect(() => {
     if (!isUserLoading && !user) {
       router.push('/login');
     }
   }, [user, isUserLoading, router]);
+
+  // Effect to check which queues the user has already joined
+  useEffect(() => {
+    if (!firestore || !user || !queues || queues.length === 0) return;
+
+    const checkJoinedQueues = async () => {
+      const joinedIds: string[] = [];
+      for (const queue of queues) {
+        const q = query(
+          collection(firestore, 'queues', queue.id, 'queueEntries'),
+          where('userId', '==', user.uid),
+          where('status', '==', 'waiting')
+        );
+        const querySnapshot = await getDocs(q);
+        if (!querySnapshot.empty) {
+          joinedIds.push(queue.id);
+        }
+      }
+      setUserJoinedQueueIds(joinedIds);
+    };
+
+    checkJoinedQueues();
+  }, [firestore, user, queues]);
+
 
   const handleJoinQueue = async (queue: any) => {
     if (!user || !firestore) {
@@ -58,7 +67,7 @@ export default function QueuesPage() {
     setIsJoining(queue.id);
 
     try {
-      // Check if user is already in this queue
+      // Re-check just in case state is stale
       if (userJoinedQueueIds.includes(queue.id)) {
         toast.error("You are already in this queue.");
         setIsJoining(null);
@@ -87,17 +96,6 @@ export default function QueuesPage() {
           queueId: queue.id,
         });
 
-        // Create a reference in the user's own collection for easy lookup
-        const userEntryRef = doc(collection(firestore, 'users', user.uid, 'queueEntries'));
-         transaction.set(userEntryRef, {
-          queueId: queue.id,
-          ticketNumber: newTicketNumber,
-          queueName: queue.name,
-          entryTime: serverTimestamp(),
-          status: 'waiting',
-          queueEntryRef: newEntryRef.path
-        });
-
         // Update the main queue document
         transaction.update(queueRef, {
           lastTicketNumber: newTicketNumber,
@@ -106,6 +104,7 @@ export default function QueuesPage() {
       });
       
       toast.success(`Successfully joined "${queue.name}" with ticket #${(queue.lastTicketNumber || 0) + 1}!`);
+      setUserJoinedQueueIds(prev => [...prev, queue.id]);
 
     } catch (error: any) {
       console.error("Error joining queue:", error);
