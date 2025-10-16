@@ -114,7 +114,7 @@ export default function QrHub() {
                             <AlertTitle>Camera Access Required</AlertTitle>
                             <AlertDescription>
                               Please allow camera access in your browser settings to use this feature.
-                            </Aler tDescription>
+                            </AlertDescription>
                           </Alert>
                        </div>
                     )}
