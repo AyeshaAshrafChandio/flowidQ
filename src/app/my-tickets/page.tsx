@@ -48,7 +48,7 @@ export default function MyTicketsPage() {
         currentNumber: queueDetails?.currentNumber || 0,
         locationName: queueDetails?.locationName || 'Unknown Location'
       };
-    }).filter(entry => entry.queueName !== 'Loading...'); // Filter out entries where queue details haven't loaded
+    }).filter(entry => entry.queueName !== 'Loading...'); // Filter out entries where queue details haven't loaded yet
   }, [queueEntries, allQueues]);
 
 
@@ -131,3 +131,5 @@ export default function MyTicketsPage() {
     </div>
   );
 }
+
+    

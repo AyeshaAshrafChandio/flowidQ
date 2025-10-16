@@ -102,6 +102,7 @@ export default function DocumentsPage() {
         }
       },
       async () => {
+        const toastId = toast.loading('Processing document...');
         try {
           const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
           const documentsColRef = collection(firestore, 'users', user.uid, 'documents');
@@ -125,11 +126,11 @@ export default function DocumentsPage() {
               throw err; 
           });
 
-          toast.success('Document uploaded successfully!');
+          toast.success('Document uploaded successfully!', { id: toastId });
 
           // Start AI analysis only if the file is an image
           if (file.type.startsWith('image/')) {
-            toast.loading('AI is analyzing your document...');
+            const aiToastId = toast.loading('AI is analyzing your document...');
             try {
               const dataUri = await fileToDataURI(file);
               const analysisResult = await analyzeDocument({ photoDataUri: dataUri });
@@ -144,21 +145,23 @@ export default function DocumentsPage() {
                  throw err;
               });
               
-              toast.dismiss(); // Dismiss the "analyzing" toast
-              toast.success(`AI detected: ${analysisResult.documentType}`);
+              toast.success(`AI detected: ${analysisResult.documentType}`, { id: aiToastId });
 
             } catch (aiError) {
               console.error("AI analysis failed:", aiError);
-              toast.dismiss(); // Dismiss the "analyzing" toast
               if (!String(aiError).includes('permission-error')) {
-                 toast.error('AI analysis failed, but your document was saved.');
+                 toast.error('AI analysis failed, but your document was saved.', { id: aiToastId });
+              } else {
+                 toast.dismiss(aiToastId);
               }
             }
           }
         } catch (error) {
             console.error("Error during post-upload process:", error);
             if (!String(error).includes('permission-error')) {
-              toast.error('An error occurred while saving the document.');
+              toast.error('An error occurred while saving the document.', { id: toastId });
+            } else {
+               toast.dismiss(toastId);
             }
         } finally {
             // This block guarantees the UI is always reset
