@@ -2,6 +2,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { FileCheck2, QrCode, Users } from "lucide-react";
 import Link from "next/link";
+import Header from "@/components/header";
 
 const features = [
   {
@@ -24,20 +25,7 @@ const features = [
 export default function Home() {
   return (
     <div className="flex flex-col min-h-screen">
-      <header className="container mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
-        <Link href="/" className="flex items-center space-x-2">
-          <QrCode className="h-8 w-8 text-primary" />
-          <span className="text-2xl font-bold">FlowIDQ</span>
-        </Link>
-        <nav className="hidden md:flex items-center space-x-4">
-          <Link href="/login">
-            <Button variant="ghost">Login</Button>
-          </Link>
-          <Link href="/signup">
-            <Button>Sign Up</Button>
-          </Link>
-        </nav>
-      </header>
+      <Header />
 
       <main className="flex-grow">
         <section className="container mx-auto px-4 sm:px-6 lg:px-8 py-20 md:py-32 text-center">

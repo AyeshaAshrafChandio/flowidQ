@@ -1,174 +1,169 @@
 /**
  * @file Firestore Security Rules for SecurePass Application
  *
- * @core_philosophy: This ruleset enforces a strict user-ownership model for personal data,
- * ensuring that only authenticated users can access their own information. Public data
- * (queues) are readable by anyone.
+ * @core_philosophy This ruleset enforces a strict user-ownership model for personal documents and data,
+ * ensuring that only authenticated users can access their own information. Top-level collections like
+ * `queues` are open for reading, but write operations are generally restricted.
  *
- * @data_structure:
- * - /users/{userId}: Stores user profiles.  All data is nested under this path.
- * - /users/{userId}/documents/{documentId}: Stores documents owned by the user.
- * - /users/{userId}/documents/{documentId}/qrCodes/{qrCodeId}: Stores QR codes for documents.
- * - /users/{userId}/documents/{documentId}/accessLogs/{accessLogId}: Stores access logs.
- * - /queues/{queueId}: Stores queue information (publicly readable).
- * - /queues/{queueId}/queueEntries/{queueEntryId}: Stores queue entries.
+ * @data_structure
+ *   - `/users/{userId}`: Stores user profiles, acting as the root for user-owned data.
+ *   - `/users/{userId}/documents/{documentId}`: Stores documents owned by a specific user.
+ *   - `/users/{userId}/documents/{documentId}/qrCodes/{qrCodeId}`: Stores QR codes associated with a document.
+ *   - `/users/{userId}/documents/{documentId}/accessLogs/{accessLogId}`: Stores access logs for a document.
+ *   - `/queues/{queueId}`: Stores information about queues (e.g., hospital queues).
+ *   - `/queues/{queueId}/queueEntries/{queueEntryId}`: Stores entries for each queue.
  *
- * @key_security_decisions:
- * - User listing is disallowed.
- * - All documents are owned by a specific user.
- * - Queues are publicly readable, while queue entries are only writable to authenticated users.
+ * @key_security_decisions
+ *   - User listing is disallowed to protect user privacy.
+ *   - Data validation is relaxed in this prototype to facilitate rapid iteration.
+ *   - Read access to queues is public, but write access is restricted (TODO: implement admin roles).
+ *   - Owner-only access is enforced for all user-owned data trees (documents, QR codes, access logs).
+ *
+ * @denormalization_for_authorization
+ *   - Path-based ownership is used extensively (e.g., `/users/{userId}/documents/{documentId}`) to avoid
+ *     the need for denormalization. The path itself establishes the ownership relationship.
+ *
+ * @structural_segregation
+ *   - Private user data (documents, QR codes, access logs) is stored under the `/users/{userId}` path,
+ *     while public queue data is stored in the top-level `/queues` collection.
  */
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
     /**
-     * @description Allows access to user profiles.
+     * @description Enforces access control for user profiles. Only the user themselves can read/write their profile.
      * @path /users/{userId}
-     * @allow (create) User with matching userId can create their profile.
-     * @allow (get, list, update, delete) User with matching userId can get, update, or delete their profile.
-     * @deny (create) User cannot create a profile with a mismatched userId.
+     * @allow (create) - User with ID 'user123' can create their profile. `request.auth.uid == 'user123'`
+     * @allow (get, update, delete) - User with ID 'user123' can read/write their profile. `request.auth.uid == 'user123'`
+     * @deny (create) - User with ID 'user456' cannot create a profile for 'user123'. `request.auth.uid != 'user123'`
+     * @deny (get, update, delete) - User with ID 'user456' cannot read/write 'user123's profile. `request.auth.uid != 'user123'`
      * @principle Enforces document ownership for all operations.
      */
     match /users/{userId} {
-      function isSignedIn() {
-        return request.auth != null;
-      }
-
+      // Helper function to check if the authenticated user is the owner of the resource.
       function isOwner(userId) {
-        return request.auth.uid == userId;
+        return request.auth != null && request.auth.uid == userId;
       }
 
+      // Helper function to check if the authenticated user is the owner of the existing resource.
       function isExistingOwner(userId) {
         return isOwner(userId) && resource != null;
       }
 
       allow get: if isOwner(userId);
-      allow list: if false;
-      allow create: if isSignedIn() && isOwner(userId);
-      allow update: if isExistingOwner(userId);
+      allow list: if false; // User listing is not allowed.
+
+      allow create: if isOwner(userId) && request.resource.data.id == userId;
+      allow update: if isExistingOwner(userId) && request.resource.data.id == resource.data.id; // Enforce immutability of userId
       allow delete: if isExistingOwner(userId);
     }
 
     /**
-     * @description Allows access to documents owned by a specific user.
+     * @description Enforces access control for user documents. Only the owner can read/write their documents.
      * @path /users/{userId}/documents/{documentId}
-     * @allow (create) User with matching userId can create a document.
-     * @allow (get, list, update, delete) User with matching userId can get, update, or delete their document.
-     * @deny (create) User cannot create a document with a mismatched userId.
+     * @allow (create) - User with ID 'user123' can create a document under their profile. `request.auth.uid == 'user123'`
+     * @allow (get, update, delete) - User with ID 'user123' can read/write the document. `request.auth.uid == 'user123'`
+     * @deny (create) - User with ID 'user456' cannot create a document under 'user123's profile. `request.auth.uid != 'user123'`
+     * @deny (get, update, delete) - User with ID 'user456' cannot read/write documents under 'user123's profile. `request.auth.uid != 'user123'`
      * @principle Enforces document ownership for all operations.
      */
     match /users/{userId}/documents/{documentId} {
-      function isSignedIn() {
-        return request.auth != null;
-      }
-
+      // Helper function to check if the authenticated user is the owner of the resource.
       function isOwner(userId) {
-        return request.auth.uid == userId;
+        return request.auth != null && request.auth.uid == userId;
       }
 
+      // Helper function to check if the authenticated user is the owner of the existing resource.
       function isExistingOwner(userId) {
         return isOwner(userId) && resource != null;
       }
 
       allow get: if isOwner(userId);
       allow list: if isOwner(userId);
-      allow create: if isSignedIn() && isOwner(userId);
-      allow update: if isExistingOwner(userId);
+
+      allow create: if isOwner(userId) && request.resource.data.userId == userId;
+      allow update: if isExistingOwner(userId) && request.resource.data.userId == resource.data.userId; // Enforce immutability of userId
       allow delete: if isExistingOwner(userId);
     }
 
     /**
-     * @description Allows access to QR codes associated with a specific document.
+     * @description Enforces access control for QR codes associated with user documents. Only the owner can read/write.
      * @path /users/{userId}/documents/{documentId}/qrCodes/{qrCodeId}
-     * @allow (create) User with matching userId can create a QR code.
-     * @allow (get, list, update, delete) User with matching userId can get, update, or delete their QR code.
-     * @deny (create) User cannot create a QR code with a mismatched userId.
+     * @allow (create) - User 'user123' can create a QR code for their document. `request.auth.uid == 'user123'`
+     * @allow (get, update, delete) - User 'user123' can read/write the QR code. `request.auth.uid == 'user123'`
+     * @deny (create) - User 'user456' cannot create a QR code for 'user123's document. `request.auth.uid != 'user123'`
+     * @deny (get, update, delete) - User 'user456' cannot read/write QR codes for 'user123's documents. `request.auth.uid != 'user123'`
      * @principle Enforces document ownership for all operations.
      */
     match /users/{userId}/documents/{documentId}/qrCodes/{qrCodeId} {
-      function isSignedIn() {
-        return request.auth != null;
-      }
-
+      // Helper function to check if the authenticated user is the owner of the resource.
       function isOwner(userId) {
-        return request.auth.uid == userId;
+        return request.auth != null && request.auth.uid == userId;
       }
 
+      // Helper function to check if the authenticated user is the owner of the existing resource.
       function isExistingOwner(userId) {
         return isOwner(userId) && resource != null;
       }
 
       allow get: if isOwner(userId);
       allow list: if isOwner(userId);
-      allow create: if isSignedIn() && isOwner(userId);
+
+      allow create: if isOwner(userId);
       allow update: if isExistingOwner(userId);
       allow delete: if isExistingOwner(userId);
     }
 
     /**
-     * @description Allows access to access logs for a specific document.
+     * @description Enforces access control for access logs associated with user documents. Only the owner can read/write.
      * @path /users/{userId}/documents/{documentId}/accessLogs/{accessLogId}
-     * @allow (create) User with matching userId can create an access log.
-     * @allow (get, list, update, delete) User with matching userId can get, update, or delete their access log.
-     * @deny (create) User cannot create an access log with a mismatched userId.
+     * @allow (create) - User 'user123' can create an access log for their document. `request.auth.uid == 'user123'`
+     * @allow (get, update, delete) - User 'user123' can read/write the access log. `request.auth.uid == 'user123'`
+     * @deny (create) - User 'user456' cannot create an access log for 'user123's document. `request.auth.uid != 'user123'`
+     * @deny (get, update, delete) - User 'user456' cannot read/write access logs for 'user123's documents. `request.auth.uid != 'user123'`
      * @principle Enforces document ownership for all operations.
      */
     match /users/{userId}/documents/{documentId}/accessLogs/{accessLogId} {
-      function isSignedIn() {
-        return request.auth != null;
-      }
-
+      // Helper function to check if the authenticated user is the owner of the resource.
       function isOwner(userId) {
-        return request.auth.uid == userId;
+        return request.auth != null && request.auth.uid == userId;
       }
 
+      // Helper function to check if the authenticated user is the owner of the existing resource.
       function isExistingOwner(userId) {
         return isOwner(userId) && resource != null;
       }
 
       allow get: if isOwner(userId);
       allow list: if isOwner(userId);
-      allow create: if isSignedIn() && isOwner(userId);
+
+      allow create: if isOwner(userId);
       allow update: if isExistingOwner(userId);
       allow delete: if isExistingOwner(userId);
     }
 
     /**
-     * @description Allows public read access to queue information.
+     * @description Allows public read access to queue information, but restricts write access.
      * @path /queues/{queueId}
-     * @allow (get, list) Any user can get or list queue information.
-     * @allow (create, update, delete) Only authenticated users can create, update or delete queue information.
-     * @principle Allows public read access while restricting write access to authenticated users.
+     * @allow (get, list) - Any user can read queue information.
+     * @deny (create, update, delete) - Only authorized users (e.g., admins) should be able to modify queue data.
+     * @principle Allows public read access with restricted write access.
      */
     match /queues/{queueId} {
-      function isSignedIn() {
-        return request.auth != null;
-      }
-
-      allow get: if true;
-      allow list: if true;
-      allow create: if isSignedIn();
-      allow update: if isSignedIn();
-      allow delete: if isSignedIn();
+      allow get, list: if true;
+      allow create, update, delete: if false; // TODO: Add admin role check
     }
 
     /**
-     * @description Allows access to queue entries for a specific queue.
+     * @description Allows read and write access to queue entries only to authorized users (e.g., queue managers)
      * @path /queues/{queueId}/queueEntries/{queueEntryId}
-     * @allow (create) Authenticated user can create a queue entry.
-     * @allow (get, list, update, delete) Authenticated user can get, update, or delete queue entries.
-     * @principle Allows authenticated users to manage queue entries.
+     * @deny (create, update, delete) - Only authorized users (e.g., admins) should be able to modify queue data.
+     * @principle Allows public read access with restricted write access.
      */
     match /queues/{queueId}/queueEntries/{queueEntryId} {
-      function isSignedIn() {
-        return request.auth != null;
-      }
-      allow get: if isSignedIn();
-      allow list: if isSignedIn();
-      allow create: if isSignedIn();
-      allow update: if isSignedIn();
-      allow delete: if isSignedIn();
+        allow get, list: if true;
+        allow create, update, delete: if false; // TODO: Add admin role check
     }
   }
 }

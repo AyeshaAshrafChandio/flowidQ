@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Poppins } from "next/font/google";
 import "./globals.css";
 import { cn } from "@/lib/utils";
+import { FirebaseClientProvider } from "@/firebase/client-provider";
 
 const poppins = Poppins({
   subsets: ["latin"],
@@ -21,7 +22,9 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark">
       <body className={cn("min-h-screen bg-background font-sans antialiased", poppins.className)}>
-        {children}
+        <FirebaseClientProvider>
+          {children}
+        </FirebaseClientProvider>
       </body>
     </html>
   );
