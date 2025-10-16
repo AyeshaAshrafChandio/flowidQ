@@ -4,7 +4,7 @@
       "$schema": "http://json-schema.org/draft-07/schema#",
       "title": "User",
       "type": "object",
-      "description": "Represents a user within the SecurePass application.",
+      "description": "Represents a user within the FlowIDQ application.",
       "properties": {
         "id": {
           "type": "string",
@@ -38,7 +38,7 @@
       "$schema": "http://json-schema.org/draft-07/schema#",
       "title": "Document",
       "type": "object",
-      "description": "Represents a user uploaded document in the SecurePass application.",
+      "description": "Represents a user uploaded document in the FlowIDQ application.",
       "properties": {
         "id": {
           "type": "string",
@@ -65,6 +65,14 @@
           "type": "string",
           "description": "URL where the document file is stored.",
           "format": "uri"
+        },
+        "isVerified": {
+          "type": "boolean",
+          "description": "Flag indicating if the document has been verified by the Document AI."
+        },
+        "isApproved": {
+          "type": "boolean",
+          "description": "Flag indicating if the document has been approved by an admin for sharing."
         }
       },
       "required": [
@@ -96,6 +104,10 @@
         "currentNumber": {
           "type": "number",
           "description": "The current number being served in the queue."
+        },
+        "totalEntries": {
+            "type": "number",
+            "description": "The total number of entries in the queue."
         }
       },
       "required": [
@@ -124,12 +136,16 @@
         },
         "entryNumber": {
           "type": "number",
-          "description": "The number assigned to this entry in the queue."
+          "description": "The number assigned to this entry in the queue (token number)."
         },
         "entryTime": {
           "type": "string",
           "description": "The date and time when the user joined the queue.",
           "format": "date-time"
+        },
+        "estimatedWaitTime": {
+            "type": "number",
+            "description": "Estimated wait time in minutes."
         }
       },
       "required": [
@@ -143,8 +159,7 @@
   },
   "auth": {
     "providers": [
-      "password",
-      "anonymous"
+      "password"
     ]
   },
   "firestore": {
@@ -156,13 +171,7 @@
           "schema": {
             "$ref": "#/backend/entities/User"
           },
-          "description": "Stores user profiles. Access is restricted to the user themselves.",
-          "params": [
-            {
-              "name": "userId",
-              "description": "The unique identifier for the user."
-            }
-          ]
+          "description": "Stores user profiles. Access is restricted to the user themselves."
         }
       },
       {
@@ -172,17 +181,7 @@
           "schema": {
             "$ref": "#/backend/entities/Document"
           },
-          "description": "Stores documents owned by a specific user. This path leverages hierarchical ownership, providing secure and efficient access control based on the user ID.",
-          "params": [
-            {
-              "name": "userId",
-              "description": "The unique identifier for the user."
-            },
-            {
-              "name": "documentId",
-              "description": "The unique identifier for the document."
-            }
-          ]
+          "description": "Stores documents owned by a specific user. This path leverages hierarchical ownership, providing secure and efficient access control based on the user ID."
         }
       },
       {
@@ -192,13 +191,7 @@
           "schema": {
             "$ref": "#/backend/entities/Queue"
           },
-          "description": "Stores information about each queue. Open access for reading, but restricted creation and modification.",
-          "params": [
-            {
-              "name": "queueId",
-              "description": "The unique identifier for the queue."
-            }
-          ]
+          "description": "Stores information about each queue. Open access for reading, but restricted creation and modification."
         }
       },
       {
@@ -208,20 +201,9 @@
           "schema": {
             "$ref": "#/backend/entities/QueueEntry"
           },
-          "description": "Stores entries for each queue. Includes denormalized userId for authorization independence. Ensures only the user can manage their queue entries.",
-          "params": [
-            {
-              "name": "queueId",
-              "description": "The unique identifier for the queue."
-            },
-            {
-              "name": "queueEntryId",
-              "description": "The unique identifier for the queue entry."
-            }
-          ]
+          "description": "Stores entries for each queue. Includes denormalized userId for authorization independence. Ensures only the user can manage their queue entries."
         }
       }
-    ],
-    "reasoning": "The Firestore structure is designed to manage users, documents, queues, and queue entries for the SecurePass application, prioritizing security, scalability, and ease of rule definition. It leverages path-based ownership for user-specific data and denormalization where necessary to achieve authorization independence.\n\n*   **/users/{userId}**: Stores user profiles. Access is restricted to the user themselves.\n*   **/users/{userId}/documents/{documentId}**: Stores documents owned by a specific user. This path leverages hierarchical ownership, providing secure and efficient access control based on the user ID. \n*   **/queues/{queueId}**: Stores information about each queue. Open access for reading, but restricted creation and modification.\n*   **/queues/{queueId}/queueEntries/{queueEntryId}**: Stores entries for each queue. Includes denormalized userId for authorization independence. Ensures only the user can manage their queue entries.\n\nThis structure achieves authorization independence by avoiding the need for `get()` calls in security rules. Access control is primarily managed through path-based ownership and denormalized data (userId in queueEntries). This approach simplifies the rules and enables atomic operations.\n\nThe design also supports the required QAPs:\n\n*   Secure `list` operations are enabled by the structural segregation of data. User documents are stored under their respective user IDs, ensuring that listing documents only returns those belonging to the authenticated user.\n*   The membership model isn't used here because we have path-based ownerships. This also simplifies the structure and rules, while maintaining security."
+    ]
   }
 }

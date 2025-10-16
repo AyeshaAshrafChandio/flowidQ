@@ -8,10 +8,8 @@ import {
   Users,
   Smartphone,
 } from 'lucide-react';
-
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { PlaceHolderImages } from '@/lib/placeholder-images';
 import { Logo } from '@/components/logo';
 
 const features = [
@@ -43,8 +41,6 @@ const features = [
 ];
 
 export default function LandingPage() {
-  const heroImage = PlaceHolderImages.find((img) => img.id === 'hero');
-
   return (
     <div className="flex min-h-screen flex-col bg-transparent">
       <header className="container mx-auto flex h-20 items-center justify-between px-4 md:px-6">
@@ -106,28 +102,6 @@ export default function LandingPage() {
           </div>
         </section>
 
-        {heroImage && (
-          <section className="container mx-auto px-4 py-16 md:px-6 md:py-24 lg:py-32">
-            <div className="relative aspect-[16/9] overflow-hidden rounded-2xl shadow-2xl">
-              <Image
-                src={heroImage.imageUrl}
-                alt={heroImage.description}
-                fill
-                className="object-cover"
-                data-ai-hint={heroImage.imageHint}
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
-              <div className="absolute bottom-0 left-0 p-8">
-                <h3 className="font-headline text-3xl font-bold text-white">
-                  Powered by Firebase and GenAI
-                </h3>
-                <p className="mt-2 max-w-lg text-lg text-white/90">
-                  Leveraging state-of-the-art technology to provide a seamless and secure experience you can trust.
-                </p>
-              </div>
-            </div>
-          </section>
-        )}
       </main>
 
       <footer className="border-t">
