@@ -2,19 +2,22 @@
 
 import { useUser } from '@/firebase';
 import { useRouter } from 'next/navigation';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import Header from '@/components/header';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { ScanLine, Upload, FileCog, VideoOff, QrCode } from 'lucide-react';
+import { ScanLine, FileCog, VideoOff, QrCode, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import jsQR from 'jsqr';
 
 export default function QrHub() {
   const { user, isUserLoading } = useUser();
   const router = useRouter();
   const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const scanAnimationRef = useRef<number>();
   const [hasCameraPermission, setHasCameraPermission] = useState<boolean | null>(null);
   const [isScanning, setIsScanning] = useState(false);
 
@@ -24,23 +27,56 @@ export default function QrHub() {
       router.push('/login');
     }
   }, [user, isUserLoading, router]);
-  
-  // Cleanup function to stop video tracks when component unmounts or scanning stops
+
+  const stopScan = useCallback(() => {
+    if (scanAnimationRef.current) {
+      cancelAnimationFrame(scanAnimationRef.current);
+    }
+    if (videoRef.current && videoRef.current.srcObject) {
+      const stream = videoRef.current.srcObject as MediaStream;
+      stream.getTracks().forEach(track => track.stop());
+      videoRef.current.srcObject = null;
+    }
+    setIsScanning(false);
+  }, []);
+
   useEffect(() => {
     return () => {
-      if (videoRef.current && videoRef.current.srcObject) {
-        const stream = videoRef.current.srcObject as MediaStream;
-        stream.getTracks().forEach(track => track.stop());
-      }
+      stopScan();
     };
-  }, []); // Run cleanup on unmount
+  }, [stopScan]);
+
+  const tick = useCallback(() => {
+    if (videoRef.current?.readyState === videoRef.current?.HAVE_ENOUGH_DATA && canvasRef.current) {
+      const video = videoRef.current;
+      const canvas = canvasRef.current;
+      const ctx = canvas.getContext('2d');
+
+      if (ctx) {
+        canvas.height = video.videoHeight;
+        canvas.width = video.videoWidth;
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const code = jsQR(imageData.data, imageData.width, imageData.height, {
+          inversionAttempts: "dontInvert",
+        });
+
+        if (code) {
+          stopScan();
+          toast.success('QR Code detected! Redirecting...');
+          router.push(code.data);
+          return; // Stop the loop
+        }
+      }
+    }
+    scanAnimationRef.current = requestAnimationFrame(tick);
+  }, [router, stopScan]);
 
 
   const startScan = async () => {
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      console.error('Camera API not available in this browser.');
-      setHasCameraPermission(false);
       toast.error('Camera not supported in this browser.');
+      setHasCameraPermission(false);
       return;
     }
     
@@ -52,6 +88,7 @@ export default function QrHub() {
       setHasCameraPermission(true);
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
+        scanAnimationRef.current = requestAnimationFrame(tick);
       }
     } catch (error) {
       console.error('Error accessing camera:', error);
@@ -61,22 +98,13 @@ export default function QrHub() {
     }
   };
   
-  const stopScan = () => {
-    if (videoRef.current && videoRef.current.srcObject) {
-      const stream = videoRef.current.srcObject as MediaStream;
-      stream.getTracks().forEach(track => track.stop());
-      videoRef.current.srcObject = null;
-    }
-    setIsScanning(false);
-  };
-
 
   if (isUserLoading || !user) {
     return (
       <div className="flex flex-col min-h-screen">
         <Header />
         <main className="flex-grow container mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-center">
-          <p>Loading...</p>
+          <Loader2 className="h-16 w-16 animate-spin text-primary" />
         </main>
       </div>
     );
@@ -91,7 +119,6 @@ export default function QrHub() {
         </h1>
         
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-          {/* QR Code Scanning Section */}
           <Card className="glowing-border">
             <CardHeader>
               <div className="flex items-center gap-4">
@@ -103,6 +130,7 @@ export default function QrHub() {
               </div>
             </CardHeader>
             <CardContent className="flex flex-col items-center justify-center">
+               <canvas ref={canvasRef} className="hidden" />
               {isScanning ? (
                 <>
                   <div className="w-full aspect-video bg-secondary/50 rounded-md flex items-center justify-center mb-4 relative overflow-hidden">
@@ -136,7 +164,6 @@ export default function QrHub() {
             </CardContent>
           </Card>
 
-          {/* Document & Sharing Section */}
           <div className="space-y-8">
             <Card className="glowing-border">
               <CardHeader>
