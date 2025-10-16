@@ -18,40 +18,48 @@ export default function QueuesPage() {
   const router = useRouter();
   const firestore = useFirestore();
 
+  const [queues, setQueues] = useState<any[]>([]);
+  const [isLoadingQueues, setIsLoadingQueues] = useState(true);
   const [isJoining, setIsJoining] = useState<string | null>(null);
   const [userJoinedQueueIds, setUserJoinedQueueIds] = useState<string[]>([]);
 
-  const queuesQuery = useMemoFirebase(() => {
-    if (!firestore) return null;
-    return query(collection(firestore, 'queues'), orderBy('name'));
-  }, [firestore]);
-
-  const { data: queues, isLoading: isLoadingQueues } = useCollection(queuesQuery);
-
-  // Effect to check which queues the user has already joined
   useEffect(() => {
-    if (!firestore || !user?.uid) return;
+    if (!firestore || !user?.uid) {
+        if (!isUserLoading) {
+            setIsLoadingQueues(false);
+        }
+        return;
+    };
 
-    const checkJoinedQueues = async () => {
-        // Use a collectionGroup query to find all of the user's tickets across all queues.
-        const q = query(
-          collectionGroup(firestore, 'queueEntries'), 
-          where('userId', '==', user.uid),
-          where('status', '==', 'waiting')
-        );
+    setIsLoadingQueues(true);
+    
+    const fetchData = async () => {
         try {
-            const querySnapshot = await getDocs(q);
-            const joinedIds = querySnapshot.docs.map(doc => doc.data().queueId);
+            // 1. Fetch all available queues
+            const queuesQuery = query(collection(firestore, 'queues'), orderBy('name'));
+            const queuesSnapshot = await getDocs(queuesQuery);
+            const queuesData = queuesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            setQueues(queuesData);
+
+            // 2. Check which queues the user has already joined
+            const joinedQueuesQuery = query(
+              collectionGroup(firestore, 'queueEntries'), 
+              where('userId', '==', user.uid),
+              where('status', '==', 'waiting')
+            );
+            const joinedSnapshot = await getDocs(joinedQueuesQuery);
+            const joinedIds = joinedSnapshot.docs.map(doc => doc.data().queueId);
             setUserJoinedQueueIds(joinedIds);
         } catch (error) {
-            console.error("Error checking joined queues:", error);
-            // This might happen if rules are not set up for collectionGroup queries yet.
-            // For now, we can let the user attempt to join, and the transaction will fail if they are already in.
+            console.error("Error fetching queues data:", error);
+            toast.error("Could not load queue information.");
+        } finally {
+            setIsLoadingQueues(false);
         }
     };
 
-    checkJoinedQueues();
-  }, [firestore, user?.uid]);
+    fetchData();
+  }, [firestore, user?.uid, isUserLoading]);
 
 
   const handleJoinQueue = async (queue: any) => {
@@ -63,7 +71,6 @@ export default function QueuesPage() {
     setIsJoining(queue.id);
 
     try {
-      // Re-check just in case state is stale
       if (userJoinedQueueIds.includes(queue.id)) {
         toast.error("You are already in this queue.");
         setIsJoining(null);
@@ -83,14 +90,12 @@ export default function QueuesPage() {
         const queueData = queueDoc.data();
         newTicketNumber = (queueData.lastTicketNumber || 0) + 1;
         
-        // Update the main queue document
         transaction.update(queueRef, {
           lastTicketNumber: newTicketNumber,
           totalInQueue: (queueData.totalInQueue || 0) + 1,
         });
 
         const newEntryRef = doc(collection(firestore, 'queues', queue.id, 'queueEntries'));
-        // Create the user's entry in the subcollection
         transaction.set(newEntryRef, {
             userId: user.uid,
             ticketNumber: newTicketNumber,
