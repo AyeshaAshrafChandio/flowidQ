@@ -135,35 +135,50 @@
           "type": "string",
           "description": "Unique identifier for the Queue entity."
         },
+        "name": {
+          "type": "string",
+          "description": "Name of the queue (e.g. 'DMV - Main Counter')."
+        },
+        "description": {
+          "type": "string",
+          "description": "A short description of the queue's purpose."
+        },
         "locationName": {
           "type": "string",
           "description": "Name of the location where the queue is active (e.g., Hospital A, Bank Branch B)."
         },
-        "description": {
-          "type": "string",
-          "description": "Description of the purpose of this queue."
-        },
         "currentNumber": {
           "type": "number",
-          "description": "The current number being served in the queue."
+          "description": "The current ticket number being served."
         },
         "averageWaitTime": {
           "type": "number",
-          "description": "Average waiting time in minutes for a person in the queue."
+          "description": "Estimated average wait time in minutes."
+        },
+        "totalInQueue": {
+          "type": "number",
+          "description": "The total number of people currently in the queue."
+        },
+        "lastTicketNumber": {
+           "type": "number",
+           "description": "The last ticket number that was issued."
         }
       },
       "required": [
         "id",
+        "name",
         "locationName",
         "currentNumber",
-        "averageWaitTime"
+        "averageWaitTime",
+        "totalInQueue",
+        "lastTicketNumber"
       ]
     },
     "QueueEntry": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "title": "QueueEntry",
       "type": "object",
-      "description": "Represents an entry in a queue.",
+      "description": "Represents a user's ticket in a specific queue.",
       "properties": {
         "id": {
           "type": "string",
@@ -171,31 +186,37 @@
         },
         "queueId": {
           "type": "string",
-          "description": "Reference to Queue. (Relationship: Queue 1:N QueueEntry)"
+          "description": "Reference to the Queue this entry belongs to."
         },
         "userId": {
           "type": "string",
-          "description": "Reference to User. (Relationship: User 1:N QueueEntry)"
+          "description": "Reference to the User who this ticket belongs to."
+        },
+        "ticketNumber": {
+          "type": "number",
+          "description": "The user's ticket number for this queue."
         },
         "entryTime": {
           "type": "string",
           "description": "Timestamp indicating when the user joined the queue.",
           "format": "date-time"
         },
-        "servedTime": {
+        "estimatedServeTime": {
           "type": "string",
-          "description": "Timestamp indicating when the user was served.",
+          "description": "The estimated time the user will be served.",
           "format": "date-time"
         },
         "status": {
           "type": "string",
-          "description": "Status of the queue entry (e.g., waiting, served, cancelled)."
+          "description": "Status of the queue entry (e.g., 'waiting', 'serving', 'served', 'cancelled').",
+          "enum": ["waiting", "serving", "served", "cancelled"]
         }
       },
       "required": [
         "id",
         "queueId",
         "userId",
+        "ticketNumber",
         "entryTime",
         "status"
       ]
@@ -252,128 +273,25 @@
     ]
   },
   "firestore": {
-    "structure": [
-      {
-        "path": "/users/{userId}",
-        "definition": {
-          "entityName": "User",
-          "schema": {
-            "$ref": "#/backend/entities/User"
-          },
-          "description": "Stores user profiles.  Root path for user-owned data.",
-          "params": [
-            {
-              "name": "userId",
-              "description": "The unique identifier for the user."
-            }
-          ]
-        }
-      },
-      {
-        "path": "/users/{userId}/documents/{documentId}",
-        "definition": {
-          "entityName": "Document",
-          "schema": {
-            "$ref": "#/backend/entities/Document"
-          },
-          "description": "Stores documents owned by a specific user.",
-          "params": [
-            {
-              "name": "userId",
-              "description": "The unique identifier for the user."
-            },
-            {
-              "name": "documentId",
-              "description": "The unique identifier for the document."
-            }
-          ]
-        }
-      },
-      {
-        "path": "/users/{userId}/documents/{documentId}/qrCodes/{qrCodeId}",
-        "definition": {
-          "entityName": "QrCode",
-          "schema": {
-            "$ref": "#/backend/entities/QrCode"
-          },
-          "description": "Stores QR codes associated with a specific document.",
-          "params": [
-            {
-              "name": "userId",
-              "description": "The unique identifier for the user."
-            },
-            {
-              "name": "documentId",
-              "description": "The unique identifier for the document."
-            },
-            {
-              "name": "qrCodeId",
-              "description": "The unique identifier for the QR code."
-            }
-          ]
-        }
-      },
-      {
-        "path": "/users/{userId}/documents/{documentId}/accessLogs/{accessLogId}",
-        "definition": {
-          "entityName": "AccessLog",
-          "schema": {
-            "$ref": "#/backend/entities/AccessLog"
-          },
-          "description": "Stores access logs for a specific document.",
-          "params": [
-            {
-              "name": "userId",
-              "description": "The unique identifier for the user."
-            },
-            {
-              "name": "documentId",
-              "description": "The unique identifier for the document."
-            },
-            {
-              "name": "accessLogId",
-              "description": "The unique identifier for the access log."
-            }
-          ]
-        }
-      },
-      {
-        "path": "/queues/{queueId}",
-        "definition": {
-          "entityName": "Queue",
-          "schema": {
-            "$ref": "#/backend/entities/Queue"
-          },
-          "description": "Stores information about each queue.",
-          "params": [
-            {
-              "name": "queueId",
-              "description": "The unique identifier for the queue."
-            }
-          ]
-        }
-      },
-      {
-        "path": "/queues/{queueId}/queueEntries/{queueEntryId}",
-        "definition": {
-          "entityName": "QueueEntry",
-          "schema": {
-            "$ref": "#/backend/entities/QueueEntry"
-          },
-          "description": "Stores entries for a specific queue.",
-          "params": [
-            {
-              "name": "queueId",
-              "description": "The unique identifier for the queue."
-            },
-            {
-              "name": "queueEntryId",
-              "description": "The unique identifier for the queue entry."
-            }
-          ]
-        }
-      }
-    ],
-    "reasoning": "The Firestore data structure is designed to ensure security, scalability, and maintainability for the SecurePass application. It leverages path-based ownership for user-related data and denormalization where necessary to avoid complex security rules and maintain authorization independence. This design ensures atomic operations and simplifies debugging.\n\n*   **Users Collection:** Stores user profiles, authenticated via Firebase Auth.\n*   **User-Owned Documents:** Documents are stored as subcollections under each user's document (`/users/{userId}/documents/{documentId}`). This establishes clear ownership, simplifying security rules.\n*   **QR Codes:** Stored as subcollections under each document (`/users/{userId}/documents/{documentId}/qrCodes/{qrCodeId}`). This maintains the relationship between documents and their associated QR codes.\n*   **Access Logs:** Stored as subcollections under each document (`/users/{userId}/documents/{documentId}/accessLogs/{accessLogId}`).\n*   **Queues and Queue Entries:** Queues are stored in a top-level `/queues` collection.  Queue entries are stored in `/queues/{queueId}/queueEntries/{queueEntryId}`.\n\n**Authorization Independence (Denormalization):**\n\n*   No denormalization is needed since the application structure uses path-based ownership for documents, QR codes, and access logs. The `userId` field within the `documents` collection establishes the relationship between a user and their documents.\n\n**QAPs (Rules are not Filters):**\n\n*   The path-based ownership (`/users/{userId}/documents/{documentId}`) ensures that listing documents is secure, as rules can easily enforce that only the owner (identified by `request.auth.uid`) can access their documents.\n*   The segregation of queues and queue entries into dedicated collections also ensures secure list operations. Security rules can be applied to allow listing of queues based on administrative roles or other criteria, without exposing unrelated data.\n\nThis design prioritizes clarity, security, and scalability, making it easier to implement robust security rules and maintain the application over time."
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "Stores user profiles."
+    },
+    "/users/{userId}/documents/{documentId}": {
+      "schema": { "$ref": "#/entities/Document" },
+      "description": "Stores documents owned by a specific user."
+    },
+    "/users/{userId}/documents/{documentId}/accessLogs/{accessLogId}": {
+      "schema": { "$ref": "#/entities/AccessLog" },
+      "description": "Stores access logs for a specific document."
+    },
+    "/queues/{queueId}": {
+      "schema": { "$ref": "#/entities/Queue" },
+      "description": "Stores information about each available queue."
+    },
+    "/queues/{queueId}/queueEntries/{queueEntryId}": {
+      "schema": { "$ref": "#/entities/QueueEntry" },
+      "description": "Stores the tickets for each user in a specific queue."
+    }
   }
 }
