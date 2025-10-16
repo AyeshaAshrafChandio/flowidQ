@@ -137,6 +137,7 @@ export default function DocumentsPage() {
             console.error("Error getting download URL or saving to Firestore:", error);
             toast.error('Failed to save document.');
         } finally {
+            // This block ensures the UI is reset even if AI analysis fails
             setIsUploading(false);
             setUploadProgress(null);
             setSelectedFile(null);

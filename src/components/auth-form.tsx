@@ -8,8 +8,8 @@ import {
   signInWithEmailAndPassword,
   updateProfile,
 } from 'firebase/auth';
-import { doc, serverTimestamp } from 'firebase/firestore';
-import { useFirestore, setDocumentNonBlocking } from '@/firebase';
+import { doc, serverTimestamp, setDoc } from 'firebase/firestore';
+import { useFirestore } from '@/firebase';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -62,7 +62,8 @@ export default function AuthForm({ mode }: AuthFormProps) {
         await updateProfile(user, { displayName: name });
         
         const userDocRef = doc(firestore, 'users', user.uid);
-        setDocumentNonBlocking(userDocRef, {
+        // Using await here to ensure document is created before redirecting
+        await setDoc(userDocRef, {
             name: name,
             email: user.email,
             createdAt: serverTimestamp(),
@@ -73,7 +74,13 @@ export default function AuthForm({ mode }: AuthFormProps) {
       }
       router.push('/qr-hub');
     } catch (err: any) {
-      setError(err.message);
+      // Firebase provides detailed error messages that are safe to display
+      // e.g., "auth/email-already-in-use", "auth/weak-password", "auth/invalid-credential"
+      const friendlyMessage = err.message
+        .replace('Firebase: ', '')
+        .replace(/\(auth\/.*\)\.?/, '')
+        .trim();
+      setError(friendlyMessage);
     } finally {
       setIsLoading(false);
     }
@@ -117,11 +124,12 @@ export default function AuthForm({ mode }: AuthFormProps) {
               id="password"
               type="password"
               required
+              minLength={6}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
             />
           </div>
-          {error && <p className="text-red-500 text-sm">{error}</p>}
+          {error && <p className="text-red-500 text-sm px-1">{error}</p>}
         </CardContent>
         <CardFooter className="flex flex-col gap-4">
           <Button type="submit" className="w-full" disabled={isLoading}>
