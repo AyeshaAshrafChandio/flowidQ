@@ -32,6 +32,7 @@ export default function QrHub() {
   const stopScan = useCallback(() => {
     if (scanAnimationRef.current) {
       cancelAnimationFrame(scanAnimationRef.current);
+      scanAnimationRef.current = undefined;
     }
     if (videoRef.current && videoRef.current.srcObject) {
       const stream = videoRef.current.srcObject as MediaStream;
@@ -42,7 +43,7 @@ export default function QrHub() {
   }, []);
 
   useEffect(() => {
-    // Cleanup function to stop scanning when the component unmounts
+    // Cleanup function to stop scanning when the component unmounts or user navigates away
     return () => {
       stopScan();
     };
@@ -63,15 +64,25 @@ export default function QrHub() {
           inversionAttempts: "dontInvert",
         });
 
-        if (code) {
+        if (code && code.data) {
           stopScan();
           toast.success('QR Code detected! Redirecting...');
-          router.push(code.data);
+          // Ensure the URL is valid before redirecting
+          try {
+            const url = new URL(code.data);
+            router.push(url.href);
+          } catch (e) {
+             toast.error('Invalid QR code data.');
+             startScan(); // a bad qr code shouldn't stop the scanning
+          }
           return; // Stop the loop
         }
       }
     }
-    scanAnimationRef.current = requestAnimationFrame(tick);
+    // Only continue scanning if the ref is still set
+    if (scanAnimationRef.current !== undefined) {
+      scanAnimationRef.current = requestAnimationFrame(tick);
+    }
   }, [router, stopScan]);
 
 
@@ -83,21 +94,24 @@ export default function QrHub() {
     }
     
     setIsScanning(true);
-    setHasCameraPermission(null); // Reset permission state on new scan attempt
+    setHasCameraPermission(null); 
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
       setHasCameraPermission(true);
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
-        // Start the scanning loop
         scanAnimationRef.current = requestAnimationFrame(tick);
       }
     } catch (error) {
       console.error('Error accessing camera:', error);
       setHasCameraPermission(false);
       setIsScanning(false);
-      toast.error('Camera access denied. Please enable it in your browser settings.');
+      if ((error as Error).name === 'NotAllowedError') {
+         toast.error('Camera access denied. Please enable it in your browser settings.');
+      } else {
+         toast.error('Could not access camera. Please try again.');
+      }
     }
   };
   
@@ -139,12 +153,12 @@ export default function QrHub() {
                   <div className="w-full aspect-video bg-secondary/50 rounded-md flex items-center justify-center mb-4 relative overflow-hidden">
                     <video ref={videoRef} className="w-full h-full object-cover" autoPlay muted playsInline />
                     {hasCameraPermission === false && (
-                       <div className="absolute inset-0 flex flex-col items-center justify-center bg-background/80 p-4">
+                       <div className="absolute inset-0 flex flex-col items-center justify-center bg-background/80 p-4 text-center">
                           <VideoOff className="h-16 w-16 text-muted-foreground mb-4" />
                           <Alert variant="destructive">
                             <AlertTitle>Camera Access Required</AlertTitle>
                             <AlertDescription>
-                              Please allow camera access in your browser settings to use this feature.
+                              Please allow camera access in your browser settings to use this feature. You may need to refresh the page after granting permission.
                             </AlertDescription>
                           </Alert>
                        </div>
@@ -152,12 +166,17 @@ export default function QrHub() {
                      {hasCameraPermission === true && (
                       <div className="absolute inset-0 border-4 border-primary/50 rounded-md animate-pulse"></div>
                      )}
+                     {hasCameraPermission === null && (
+                        <div className="absolute inset-0 flex items-center justify-center bg-background/80">
+                            <Loader2 className="h-16 w-16 animate-spin text-primary" />
+                        </div>
+                     )}
                   </div>
-                  <Button onClick={stopScan} variant="outline">Cancel</Button>
+                  <Button onClick={stopScan} variant="outline">Cancel Scan</Button>
                 </>
               ) : (
-                <div className="text-center">
-                   <p className="text-muted-foreground mb-4">Click the button to start scanning a QR code.</p>
+                <div className="text-center p-4">
+                   <p className="text-muted-foreground mb-4">Click the button below to start scanning a QR code with your device's camera.</p>
                    <Button onClick={startScan}>
                     <ScanLine className="mr-2 h-4 w-4" />
                     Scan QR Code
