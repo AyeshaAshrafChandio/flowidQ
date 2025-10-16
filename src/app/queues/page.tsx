@@ -30,7 +30,7 @@ export default function QueuesPage() {
 
   // Effect to check which queues the user has already joined
   useEffect(() => {
-    if (!firestore || !user) return;
+    if (!firestore || !user?.uid) return;
 
     const checkJoinedQueues = async () => {
         // Use a collectionGroup query to find all of the user's tickets across all queues.
@@ -39,13 +39,19 @@ export default function QueuesPage() {
           where('userId', '==', user.uid),
           where('status', '==', 'waiting')
         );
-        const querySnapshot = await getDocs(q);
-        const joinedIds = querySnapshot.docs.map(doc => doc.data().queueId);
-        setUserJoinedQueueIds(joinedIds);
+        try {
+            const querySnapshot = await getDocs(q);
+            const joinedIds = querySnapshot.docs.map(doc => doc.data().queueId);
+            setUserJoinedQueueIds(joinedIds);
+        } catch (error) {
+            console.error("Error checking joined queues:", error);
+            // This might happen if rules are not set up for collectionGroup queries yet.
+            // For now, we can let the user attempt to join, and the transaction will fail if they are already in.
+        }
     };
 
     checkJoinedQueues();
-  }, [firestore, user]);
+  }, [firestore, user?.uid]);
 
 
   const handleJoinQueue = async (queue: any) => {
