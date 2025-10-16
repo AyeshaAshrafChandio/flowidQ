@@ -169,7 +169,7 @@ export default function QrHub() {
                           <CardDescription>Share your documents securely.</CardDescription>
                       </div>
                   </div>
-              </Header>
+              </CardHeader>
               <CardContent>
                   <p className="text-muted-foreground text-sm mb-4">
                       Select documents to generate a new secure QR code for sharing.
