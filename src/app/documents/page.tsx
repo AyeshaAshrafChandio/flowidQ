@@ -16,6 +16,8 @@ import QRCode from 'qrcode.react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogClose } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { analyzeDocument } from '@/ai/flows/document-analyzer-flow';
+import { errorEmitter } from '@/firebase/error-emitter';
+import { FirestorePermissionError } from '@/firebase/errors';
 
 
 export default function DocumentsPage() {
@@ -96,6 +98,7 @@ export default function DocumentsPage() {
         setSelectedFile(null);
       },
       async () => {
+        let docRef;
         try {
           const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
           const documentsColRef = collection(firestore, 'users', user.uid, 'documents');
@@ -110,7 +113,14 @@ export default function DocumentsPage() {
             userId: user.uid,
           };
 
-          const docRef = await addDoc(documentsColRef, docData);
+          docRef = await addDoc(documentsColRef, docData).catch(err => {
+              errorEmitter.emit('permission-error', new FirestorePermissionError({
+                  path: documentsColRef.path,
+                  operation: 'create',
+                  requestResourceData: docData
+              }));
+              throw err; // Re-throw to be caught by the outer try-catch
+          });
           toast.success('Document uploaded successfully!');
 
           if (file.type.startsWith('image/')) {
@@ -118,9 +128,14 @@ export default function DocumentsPage() {
             try {
               const dataUri = await fileToDataURI(file);
               const analysisResult = await analyzeDocument({ photoDataUri: dataUri });
+              const aiData = { aiAnalysis: analysisResult };
               
-              await updateDoc(docRef, {
-                  aiAnalysis: analysisResult
+              await updateDoc(docRef, aiData).catch(err => {
+                errorEmitter.emit('permission-error', new FirestorePermissionError({
+                    path: docRef!.path,
+                    operation: 'update',
+                    requestResourceData: aiData
+                }));
               });
               
               toast.dismiss();
@@ -135,9 +150,10 @@ export default function DocumentsPage() {
           }
         } catch (error) {
             console.error("Error getting download URL or saving to Firestore:", error);
-            toast.error('Failed to save document.');
+            if (!String(error).includes('permission-error')) {
+              toast.error('Failed to save document.');
+            }
         } finally {
-            // This block ensures the UI is reset even if AI analysis fails
             setIsUploading(false);
             setUploadProgress(null);
             setSelectedFile(null);
@@ -156,7 +172,12 @@ export default function DocumentsPage() {
     const storageRef = ref(storage, storagePath);
 
     try {
-      await deleteDoc(docRef);
+      await deleteDoc(docRef).catch(err => {
+        errorEmitter.emit('permission-error', new FirestorePermissionError({
+            path: docRef.path,
+            operation: 'delete',
+        }));
+      });
       await deleteObject(storageRef);
       toast.success('Document deleted successfully.');
       setSelectedDocs(prev => prev.filter(id => id !== docId));
@@ -183,15 +204,20 @@ export default function DocumentsPage() {
     }
     
     const docRef = doc(firestore, 'users', user.uid, 'documents', docId);
+    const updateData = { name: editingDocName };
     
-    try {
-      await updateDoc(docRef, { name: editingDocName });
-      toast.success('Document renamed successfully.');
-      handleCancelEdit();
-    } catch (error) {
+    updateDoc(docRef, updateData).catch(error => {
       console.error('Error updating document name:', error);
+      errorEmitter.emit('permission-error', new FirestorePermissionError({
+          path: docRef.path,
+          operation: 'update',
+          requestResourceData: updateData
+      }));
       toast.error('Failed to rename document.');
-    }
+    });
+    
+    toast.success('Document rename initiated.');
+    handleCancelEdit();
   };
 
   const handleGenerateQrCode = async () => {

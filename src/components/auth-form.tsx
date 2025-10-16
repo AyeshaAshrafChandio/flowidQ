@@ -22,6 +22,9 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import Link from 'next/link';
+import { errorEmitter } from '@/firebase/error-emitter';
+import { FirestorePermissionError } from '@/firebase/errors';
+
 
 interface AuthFormProps {
   mode: 'login' | 'signup';
@@ -62,20 +65,25 @@ export default function AuthForm({ mode }: AuthFormProps) {
         await updateProfile(user, { displayName: name });
         
         const userDocRef = doc(firestore, 'users', user.uid);
-        // Using await here to ensure document is created before redirecting
-        await setDoc(userDocRef, {
+        const userData = {
             name: name,
             email: user.email,
             createdAt: serverTimestamp(),
-        }, { merge: true });
+        };
+
+        setDoc(userDocRef, userData, { merge: true }).catch(err => {
+            errorEmitter.emit('permission-error', new FirestorePermissionError({
+                path: userDocRef.path,
+                operation: 'create',
+                requestResourceData: userData
+            }));
+        });
 
       } else {
         await signInWithEmailAndPassword(auth, email, password);
       }
       router.push('/qr-hub');
     } catch (err: any) {
-      // Firebase provides detailed error messages that are safe to display
-      // e.g., "auth/email-already-in-use", "auth/weak-password", "auth/invalid-credential"
       const friendlyMessage = err.message
         .replace('Firebase: ', '')
         .replace(/\(auth\/.*\)\.?/, '')
