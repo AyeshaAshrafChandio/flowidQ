@@ -98,7 +98,7 @@ export default function DocumentsPage() {
       () => {
         getDownloadURL(uploadTask.snapshot.ref).then(async (downloadURL) => {
           const documentsColRef = collection(firestore, 'users', user.uid, 'documents');
-          const docRef = await addDoc(documentsColRef, {
+          const docData = {
             name: file.name,
             fileUrl: downloadURL,
             storagePath: storageRef.fullPath,
@@ -106,7 +106,8 @@ export default function DocumentsPage() {
             category: file.type,
             isEncrypted: true,
             userId: user.uid,
-          });
+          };
+          const docRef = await addDoc(documentsColRef, docData);
 
           toast.success('Document uploaded successfully!');
           
@@ -131,10 +132,15 @@ export default function DocumentsPage() {
             }
           }
           
-          // Reset state after everything is done
           setIsUploading(false);
           setUploadProgress(null);
           setSelectedFile(null);
+        }).catch((error) => {
+            console.error("Error getting download URL or saving to Firestore:", error);
+            toast.error('Failed to save document.');
+            setIsUploading(false);
+            setUploadProgress(null);
+            setSelectedFile(null);
         });
       }
     );
