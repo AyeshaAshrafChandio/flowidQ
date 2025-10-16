@@ -97,6 +97,9 @@ export default function DocumentsPage() {
         setIsUploading(false);
         setUploadProgress(null);
         setSelectedFile(null);
+        if (fileInputRef.current) {
+          fileInputRef.current.value = '';
+        }
       },
       async () => {
         try {
@@ -158,7 +161,7 @@ export default function DocumentsPage() {
               toast.error('Failed to save document metadata.');
             }
         } finally {
-            // This block guarantees the UI is reset
+            // This block guarantees the UI is always reset
             setIsUploading(false);
             setUploadProgress(null);
             setSelectedFile(null);
@@ -431,5 +434,3 @@ export default function DocumentsPage() {
     </div>
   );
 }
-
-    
