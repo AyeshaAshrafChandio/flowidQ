@@ -8,6 +8,8 @@ import Header from '@/components/header';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Loader2, Ticket, Users, Hash } from 'lucide-react';
 import { collection, query, where, collectionGroup } from 'firebase/firestore';
+import Link from 'next/link';
+import { Button } from '@/components/ui/button';
 
 export default function MyTicketsPage() {
   const { user, isUserLoading } = useUser();
@@ -129,5 +131,3 @@ export default function MyTicketsPage() {
     </div>
   );
 }
-
-    
