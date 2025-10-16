@@ -25,7 +25,6 @@ export default function QrHub() {
   const [isScanning, setIsScanning] = useState(false);
   const [isProcessingQr, setIsProcessingQr] = useState(false);
 
-  // Function to stop the camera and scanning animation
   const stopScan = useCallback(() => {
     setIsScanning(false);
     if (animationFrameId.current) {
@@ -41,20 +40,19 @@ export default function QrHub() {
     }
   }, []);
 
-  // Effect for user authentication and cleanup
   useEffect(() => {
     if (!isUserLoading && !user) {
       router.push('/login');
     }
-    // Cleanup function to stop scanning when component unmounts or user navigates away
     return () => {
       stopScan();
     };
   }, [user, isUserLoading, router, stopScan]);
 
+
   const tick = useCallback(() => {
     if (!isScanning || !videoRef.current || !canvasRef.current || videoRef.current.readyState !== videoRef.current.HAVE_ENOUGH_DATA) {
-        if(isScanning) { // only request next frame if we are still scanning
+        if(isScanning) {
             animationFrameId.current = requestAnimationFrame(tick);
         }
         return;
@@ -73,47 +71,44 @@ export default function QrHub() {
 
         if (code?.data) {
             setIsProcessingQr(true);
-            stopScan(); // Stop scanning immediately upon detection
+            stopScan();
             toast.success('QR Code detected! Redirecting...');
             
             try {
               const url = new URL(code.data);
-              // Security: Only allow redirection to the same origin
               if (url.origin === window.location.origin) {
                   router.push(url.pathname + url.search);
               } else {
                   toast.error('QR Code leads to an external website, which is not allowed.');
-                  setIsProcessingQr(false); // Reset for another scan if needed
+                  setIsProcessingQr(false);
               }
             } catch (e) {
                toast.error('Invalid QR code data.');
-               setIsProcessingQr(false); // Reset for another scan
+               setIsProcessingQr(false);
             }
-            return; // Exit the tick loop
+            return;
         }
     }
-    if (isScanning) { // Continue the loop if still scanning
+    if (isScanning) {
         animationFrameId.current = requestAnimationFrame(tick);
     }
   }, [isScanning, router, stopScan]);
 
-
   const startScan = useCallback(async () => {
-    if (isScanning) return;
+    if (isScanning || isProcessingQr) return;
     
-    setIsScanning(true);
-    setIsProcessingQr(false);
-    setHasCameraPermission(true);
-
     try {
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
         throw new Error('Camera not supported on this device.');
       }
       const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
       streamRef.current = stream;
+      setHasCameraPermission(true);
+      setIsScanning(true);
+
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
-        videoRef.current.play(); // Explicitly play the video
+        videoRef.current.play();
         animationFrameId.current = requestAnimationFrame(tick);
       }
     } catch (error) {
@@ -123,8 +118,7 @@ export default function QrHub() {
       stopScan();
       toast.error('Camera access was denied. Please enable it in your browser settings.');
     }
-  }, [isScanning, stopScan, tick]);
-
+  }, [isScanning, isProcessingQr, stopScan, tick]);
 
   if (isUserLoading || !user) {
     return (
@@ -173,23 +167,30 @@ export default function QrHub() {
                     </div>
                 )}
                 
-                {isScanning && hasCameraPermission && !isProcessingQr && (
+                {isScanning && !isProcessingQr && (
                   <div className="absolute inset-0 border-4 border-primary/50 rounded-md animate-pulse"></div>
                 )}
+
                 {isProcessingQr && (
                     <div className="absolute inset-0 flex flex-col items-center justify-center bg-background/80">
                         <Loader2 className="h-16 w-16 animate-spin text-primary" />
                         <p className="mt-4 text-sm text-foreground">Processing QR Code...</p>
                     </div>
                 )}
+
+                {!isScanning && !isProcessingQr && (
+                   <div className="absolute inset-0 flex items-center justify-center bg-background/50">
+                     <QrCode className="h-24 w-24 text-muted-foreground/50"/>
+                   </div>
+                )}
               </div>
               
               {isScanning ? (
                   <Button onClick={stopScan} variant="outline" disabled={isProcessingQr}>Cancel Scan</Button>
               ) : (
-                <Button onClick={startScan}>
+                <Button onClick={startScan} disabled={isProcessingQr}>
                   <ScanLine className="mr-2 h-4 w-4" />
-                  Scan QR Code
+                  {isProcessingQr ? 'Processing...' : 'Scan QR Code'}
                 </Button>
               )}
             </CardContent>
@@ -246,5 +247,3 @@ export default function QrHub() {
     </div>
   );
 }
-
-    
