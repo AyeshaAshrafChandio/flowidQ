@@ -8,7 +8,7 @@ import Header from '@/components/header';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Users, Clock, Hash, Loader2, UserCheck, Ticket } from 'lucide-react';
-import { collection, query, orderBy, addDoc, serverTimestamp, doc, runTransaction, where, getDocs } from 'firebase/firestore';
+import { collection, query, orderBy, addDoc, serverTimestamp, doc, runTransaction, where, getDocs, collectionGroup } from 'firebase/firestore';
 import toast from 'react-hot-toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 
@@ -33,8 +33,9 @@ export default function QueuesPage() {
     if (!firestore || !user) return;
 
     const checkJoinedQueues = async () => {
+        // Use a collectionGroup query to find all of the user's tickets across all queues.
         const q = query(
-          collection(firestore, 'queueEntries'), 
+          collectionGroup(firestore, 'queueEntries'), 
           where('userId', '==', user.uid),
           where('status', '==', 'waiting')
         );
@@ -44,8 +45,7 @@ export default function QueuesPage() {
     };
 
     checkJoinedQueues();
-    // Re-check when queues data changes as well, in case this runs before queues are loaded
-  }, [firestore, user, queues]);
+  }, [firestore, user]);
 
 
   const handleJoinQueue = async (queue: any) => {
@@ -65,7 +65,7 @@ export default function QueuesPage() {
       }
 
       const queueRef = doc(firestore, 'queues', queue.id);
-      const queueEntriesRef = collection(firestore, 'queues', queue.id, 'queueEntries');
+      
       let newTicketNumber = 0;
 
       await runTransaction(firestore, async (transaction) => {
@@ -83,8 +83,9 @@ export default function QueuesPage() {
           totalInQueue: (queueData.totalInQueue || 0) + 1,
         });
 
+        const newEntryRef = doc(collection(firestore, 'queues', queue.id, 'queueEntries'));
         // Create the user's entry in the subcollection
-        transaction.set(doc(queueEntriesRef), {
+        transaction.set(newEntryRef, {
             userId: user.uid,
             ticketNumber: newTicketNumber,
             entryTime: serverTimestamp(),
