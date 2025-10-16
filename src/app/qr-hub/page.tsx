@@ -16,6 +16,7 @@ export default function QrHub() {
   const router = useRouter();
   const videoRef = useRef<HTMLVideoElement>(null);
   const [hasCameraPermission, setHasCameraPermission] = useState<boolean | null>(null);
+  const [isScanning, setIsScanning] = useState(false);
 
 
   useEffect(() => {
@@ -24,38 +25,50 @@ export default function QrHub() {
     }
   }, [user, isUserLoading, router]);
   
+  // Cleanup function to stop video tracks when component unmounts or scanning stops
   useEffect(() => {
-    const getCameraPermission = async () => {
-      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        console.error('Camera API not available in this browser.');
-        setHasCameraPermission(false);
-        toast.error('Camera not supported in this browser.');
-        return;
-      }
-
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
-        setHasCameraPermission(true);
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-        }
-      } catch (error) {
-        console.error('Error accessing camera:', error);
-        setHasCameraPermission(false);
-        toast.error('Camera access denied. Please enable it in your browser settings.');
-      }
-    };
-
-    getCameraPermission();
-    
-    // Cleanup function to stop the video stream when the component unmounts
     return () => {
       if (videoRef.current && videoRef.current.srcObject) {
         const stream = videoRef.current.srcObject as MediaStream;
         stream.getTracks().forEach(track => track.stop());
       }
     };
-  }, []);
+  }, [isScanning]);
+
+
+  const startScan = async () => {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      console.error('Camera API not available in this browser.');
+      setHasCameraPermission(false);
+      toast.error('Camera not supported in this browser.');
+      return;
+    }
+    
+    setIsScanning(true);
+    setHasCameraPermission(null);
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+      setHasCameraPermission(true);
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+      }
+    } catch (error) {
+      console.error('Error accessing camera:', error);
+      setHasCameraPermission(false);
+      setIsScanning(false);
+      toast.error('Camera access denied. Please enable it in your browser settings.');
+    }
+  };
+  
+  const stopScan = () => {
+    if (videoRef.current && videoRef.current.srcObject) {
+      const stream = videoRef.current.srcObject as MediaStream;
+      stream.getTracks().forEach(track => track.stop());
+    }
+    setIsScanning(false);
+  };
+
 
   if (isUserLoading || !user) {
     return (
@@ -88,24 +101,37 @@ export default function QrHub() {
                 </div>
               </div>
             </CardHeader>
-            <CardContent>
-              <div className="w-full aspect-video bg-secondary/50 rounded-md flex items-center justify-center mb-4 relative overflow-hidden">
-                <video ref={videoRef} className="w-full h-full object-cover" autoPlay muted playsInline />
-                {hasCameraPermission === false && (
-                   <div className="absolute inset-0 flex flex-col items-center justify-center bg-background/80 p-4">
-                      <VideoOff className="h-16 w-16 text-muted-foreground mb-4" />
-                      <Alert variant="destructive">
-                        <AlertTitle>Camera Access Required</AlertTitle>
-                        <AlertDescription>
-                          Please allow camera access in your browser settings to use this feature.
-                        </AlertDescription>
-                      </Alert>
-                   </div>
-                )}
-                 {hasCameraPermission === true && (
-                  <div className="absolute inset-0 border-4 border-primary/50 rounded-md animate-pulse"></div>
-                 )}
-              </div>
+            <CardContent className="flex flex-col items-center justify-center">
+              {isScanning ? (
+                <>
+                  <div className="w-full aspect-video bg-secondary/50 rounded-md flex items-center justify-center mb-4 relative overflow-hidden">
+                    <video ref={videoRef} className="w-full h-full object-cover" autoPlay muted playsInline />
+                    {hasCameraPermission === false && (
+                       <div className="absolute inset-0 flex flex-col items-center justify-center bg-background/80 p-4">
+                          <VideoOff className="h-16 w-16 text-muted-foreground mb-4" />
+                          <Alert variant="destructive">
+                            <AlertTitle>Camera Access Required</AlertTitle>
+                            <AlertDescription>
+                              Please allow camera access in your browser settings to use this feature.
+                            </AlertDescription>
+                          </Alert>
+                       </div>
+                    )}
+                     {hasCameraPermission === true && (
+                      <div className="absolute inset-0 border-4 border-primary/50 rounded-md animate-pulse"></div>
+                     )}
+                  </div>
+                  <Button onClick={stopScan} variant="outline">Cancel</Button>
+                </>
+              ) : (
+                <div className="text-center">
+                   <p className="text-muted-foreground mb-4">Click the button to start scanning a QR code.</p>
+                   <Button onClick={startScan}>
+                    <ScanLine className="mr-2 h-4 w-4" />
+                    Scan QR Code
+                   </Button>
+                </div>
+              )}
             </CardContent>
           </Card>
 
@@ -143,7 +169,7 @@ export default function QrHub() {
                           <CardDescription>Share your documents securely.</CardDescription>
                       </div>
                   </div>
-              </CardHeader>
+              </Header>
               <CardContent>
                   <p className="text-muted-foreground text-sm mb-4">
                       Select documents to generate a new secure QR code for sharing.
