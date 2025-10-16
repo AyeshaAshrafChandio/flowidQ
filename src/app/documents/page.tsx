@@ -74,7 +74,7 @@ export default function DocumentsPage() {
     }
   };
 
-  const handleUpload = async (file: File) => {
+  const handleUpload = (file: File) => {
     if (!user || !firestore) {
       toast.error('You must be logged in to upload documents.');
       return;
@@ -82,6 +82,7 @@ export default function DocumentsPage() {
     
     setIsUploading(true);
     setUploadProgress(0);
+    setSelectedFile(file);
 
     const storageRef = ref(storage, `documents/${user.uid}/${Date.now()}_${file.name}`);
     const uploadTask = uploadBytesResumable(storageRef, file);
@@ -116,7 +117,7 @@ export default function DocumentsPage() {
             userId: user.uid,
           };
 
-          const docRef = await addDoc(documentsColRef, docData).catch(err => {
+          const docRefPromise = addDoc(documentsColRef, docData).catch(err => {
               errorEmitter.emit('permission-error', new FirestorePermissionError({
                   path: documentsColRef.path,
                   operation: 'create',
@@ -124,7 +125,14 @@ export default function DocumentsPage() {
               }));
               throw err; 
           });
-          toast.success('Document uploaded successfully!');
+
+          toast.promise(docRefPromise, {
+            loading: 'Saving document metadata...',
+            success: 'Document uploaded successfully!',
+            error: 'Failed to save document metadata.',
+          });
+          
+          const docRef = await docRefPromise;
 
           // Start AI analysis only if the file is an image
           if (file.type.startsWith('image/')) {
@@ -157,7 +165,7 @@ export default function DocumentsPage() {
         } catch (error) {
             console.error("Error during post-upload process:", error);
             if (!String(error).includes('permission-error')) {
-              toast.error('Failed to save document metadata.');
+              toast.error('An error occurred while saving the document.');
             }
         } finally {
             // This block guarantees the UI is always reset
@@ -455,5 +463,3 @@ export default function DocumentsPage() {
     </div>
   );
 }
-
-    
