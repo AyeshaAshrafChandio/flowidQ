@@ -28,9 +28,7 @@ export default function DocumentsPage() {
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [selectedDocs, setSelectedDocs] = useState<string[]>([]
-
-];
+  const [selectedDocs, setSelectedDocs] = useState<string[]>([]);
   const [generatedQrValue, setGeneratedQrValue] = useState<string | null>(null);
   const [editingDocId, setEditingDocId] = useState<string | null>(null);
   const [editingDocName, setEditingDocName] = useState('');
@@ -97,22 +95,24 @@ export default function DocumentsPage() {
         setUploadProgress(null);
         setSelectedFile(null);
       },
-      () => {
-        getDownloadURL(uploadTask.snapshot.ref).then(async (downloadURL) => {
+      async () => {
+        try {
+          const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
           const documentsColRef = collection(firestore, 'users', user.uid, 'documents');
+          
           const docData = {
             name: file.name,
             fileUrl: downloadURL,
             storagePath: storageRef.fullPath,
             uploadDate: serverTimestamp(),
             category: file.type,
-            isEncrypted: true,
+            isEncrypted: true, 
             userId: user.uid,
           };
-          const docRef = await addDoc(documentsColRef, docData);
 
+          const docRef = await addDoc(documentsColRef, docData);
           toast.success('Document uploaded successfully!');
-          
+
           if (file.type.startsWith('image/')) {
             toast.loading('AI is analyzing your document...');
             try {
@@ -133,17 +133,17 @@ export default function DocumentsPage() {
               toast.error('AI analysis failed.');
             }
           }
-          
-          setIsUploading(false);
-          setUploadProgress(null);
-          setSelectedFile(null);
-        }).catch((error) => {
+        } catch (error) {
             console.error("Error getting download URL or saving to Firestore:", error);
             toast.error('Failed to save document.');
+        } finally {
             setIsUploading(false);
             setUploadProgress(null);
             setSelectedFile(null);
-        });
+            if (fileInputRef.current) {
+              fileInputRef.current.value = '';
+            }
+        }
       }
     );
   };
