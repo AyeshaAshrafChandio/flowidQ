@@ -123,13 +123,14 @@ export default function DocumentsPage() {
           });
           toast.success('Document uploaded successfully!');
 
+          // Start AI analysis only if the file is an image
           if (file.type.startsWith('image/')) {
             toast.loading('AI is analyzing your document...');
             try {
               const dataUri = await fileToDataURI(file);
               const analysisResult = await analyzeDocument({ photoDataUri: dataUri });
-              const aiData = { aiAnalysis: analysisResult };
               
+              const aiData = { aiAnalysis: analysisResult };
               await updateDoc(docRef, aiData).catch(err => {
                 errorEmitter.emit('permission-error', new FirestorePermissionError({
                     path: docRef!.path,
@@ -139,15 +140,15 @@ export default function DocumentsPage() {
                  throw err;
               });
               
-              toast.dismiss();
+              toast.dismiss(); // Dismiss the "analyzing" toast
               toast.success(`AI detected: ${analysisResult.documentType}`);
               console.log('AI Analysis:', analysisResult);
 
             } catch (aiError) {
               console.error("AI analysis failed:", aiError);
-              toast.dismiss();
+              toast.dismiss(); // Dismiss the "analyzing" toast
               if (!String(aiError).includes('permission-error')) {
-                 toast.error('AI analysis failed.');
+                 toast.error('AI analysis failed, but your document was saved.');
               }
             }
           }
@@ -157,6 +158,7 @@ export default function DocumentsPage() {
               toast.error('Failed to save document metadata.');
             }
         } finally {
+            // This block guarantees the UI is reset
             setIsUploading(false);
             setUploadProgress(null);
             setSelectedFile(null);

@@ -14,6 +14,7 @@ export default function MyTicketsPage() {
   const router = useRouter();
   const firestore = useFirestore();
 
+  // 1. Get all queue entries for the current user that are 'waiting'
   const userQueueEntriesQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
     return query(
@@ -22,26 +23,29 @@ export default function MyTicketsPage() {
       where('status', '==', 'waiting')
     );
   }, [firestore, user]);
-
   const { data: queueEntries, isLoading: isLoadingEntries } = useCollection(userQueueEntriesQuery);
   
+  // 2. Get all queues
   const allQueuesQuery = useMemoFirebase(() => {
     if(!firestore) return null;
     return query(collection(firestore, 'queues'));
   }, [firestore]);
-
   const { data: allQueues, isLoading: isLoadingQueues } = useCollection(allQueuesQuery);
   
+  // 3. Enrich the user's queue entries with details from the allQueues query
   const enrichedEntries = useMemo(() => {
     if (!queueEntries || !allQueues) return [];
+    
+    const queuesMap = new Map(allQueues.map(q => [q.id, q]));
+
     return queueEntries.map(entry => {
-      const queueDetails = allQueues.find(q => q.id === entry.queueId);
+      const queueDetails = queuesMap.get(entry.queueId);
       return {
         ...entry,
         queueName: queueDetails?.name || 'Loading...',
         currentNumber: queueDetails?.currentNumber || 0,
       };
-    }).filter(entry => entry.queueName !== 'Loading...');
+    }).filter(entry => entry.queueName !== 'Loading...'); // Filter out entries where queue details are not yet loaded
   }, [queueEntries, allQueues]);
 
 
@@ -100,10 +104,6 @@ export default function MyTicketsPage() {
                              <div className="flex items-center justify-between text-sm">
                                 <span className="flex items-center text-muted-foreground"><Users className="mr-2 h-4 w-4" /> People Ahead</span>
                                 <span className="font-bold">{peopleAhead}</span>
-                            </div>
-                            <div className="flex items-center justify-center text-sm p-3 mt-4 rounded-lg bg-primary/10 text-primary-foreground">
-                                <UserCircle className="mr-2 h-5 w-5 text-primary" />
-                                <span className="font-bold">You are here!</span>
                             </div>
                         </CardContent>
                     </Card>
