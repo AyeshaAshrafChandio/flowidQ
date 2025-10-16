@@ -1,0 +1,379 @@
+{
+  "entities": {
+    "User": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "User",
+      "type": "object",
+      "description": "Represents a user of the SecurePass application.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the User entity."
+        },
+        "email": {
+          "type": "string",
+          "description": "Email address of the user.",
+          "format": "email"
+        },
+        "name": {
+          "type": "string",
+          "description": "Full name of the user."
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Timestamp indicating when the user account was created.",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "email",
+        "name",
+        "createdAt"
+      ]
+    },
+    "Document": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Document",
+      "type": "object",
+      "description": "Represents a digital document stored in the user's wallet.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Document entity."
+        },
+        "userId": {
+          "type": "string",
+          "description": "Reference to User. (Relationship: User 1:N Document)"
+        },
+        "name": {
+          "type": "string",
+          "description": "Name of the document."
+        },
+        "fileUrl": {
+          "type": "string",
+          "description": "URL of the stored document file.",
+          "format": "uri"
+        },
+        "uploadDate": {
+          "type": "string",
+          "description": "Timestamp indicating when the document was uploaded.",
+          "format": "date-time"
+        },
+        "category": {
+          "type": "string",
+          "description": "Category of the document (e.g., ID, Passport, etc.)."
+        },
+        "isEncrypted": {
+          "type": "boolean",
+          "description": "Indicates whether the document is encrypted."
+        }
+      },
+      "required": [
+        "id",
+        "userId",
+        "name",
+        "fileUrl",
+        "uploadDate",
+        "category",
+        "isEncrypted"
+      ]
+    },
+    "QrCode": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "QrCode",
+      "type": "object",
+      "description": "Represents a QR code generated for sharing a document.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the QR Code entity."
+        },
+        "documentId": {
+          "type": "string",
+          "description": "Reference to Document. (Relationship: Document 1:1 QrCode)"
+        },
+        "generatedDate": {
+          "type": "string",
+          "description": "Timestamp indicating when the QR code was generated.",
+          "format": "date-time"
+        },
+        "expirationDate": {
+          "type": "string",
+          "description": "Timestamp indicating when the QR code expires.",
+          "format": "date-time"
+        },
+        "accessCount": {
+          "type": "number",
+          "description": "Number of times the QR code has been accessed."
+        },
+        "otp": {
+          "type": "string",
+          "description": "One-Time Password (OTP) associated with the QR code (if any)."
+        },
+        "passwordProtected": {
+          "type": "boolean",
+          "description": "Indicates whether the QR code access is password-protected."
+        }
+      },
+      "required": [
+        "id",
+        "documentId",
+        "generatedDate",
+        "expirationDate",
+        "accessCount",
+        "passwordProtected"
+      ]
+    },
+    "Queue": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Queue",
+      "type": "object",
+      "description": "Represents a queue in the smart queue system.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Queue entity."
+        },
+        "locationName": {
+          "type": "string",
+          "description": "Name of the location where the queue is active (e.g., Hospital A, Bank Branch B)."
+        },
+        "description": {
+          "type": "string",
+          "description": "Description of the purpose of this queue."
+        },
+        "currentNumber": {
+          "type": "number",
+          "description": "The current number being served in the queue."
+        },
+        "averageWaitTime": {
+          "type": "number",
+          "description": "Average waiting time in minutes for a person in the queue."
+        }
+      },
+      "required": [
+        "id",
+        "locationName",
+        "currentNumber",
+        "averageWaitTime"
+      ]
+    },
+    "QueueEntry": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "QueueEntry",
+      "type": "object",
+      "description": "Represents an entry in a queue.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the QueueEntry entity."
+        },
+        "queueId": {
+          "type": "string",
+          "description": "Reference to Queue. (Relationship: Queue 1:N QueueEntry)"
+        },
+        "userId": {
+          "type": "string",
+          "description": "Reference to User. (Relationship: User 1:N QueueEntry)"
+        },
+        "entryTime": {
+          "type": "string",
+          "description": "Timestamp indicating when the user joined the queue.",
+          "format": "date-time"
+        },
+        "servedTime": {
+          "type": "string",
+          "description": "Timestamp indicating when the user was served.",
+          "format": "date-time"
+        },
+        "status": {
+          "type": "string",
+          "description": "Status of the queue entry (e.g., waiting, served, cancelled)."
+        }
+      },
+      "required": [
+        "id",
+        "queueId",
+        "userId",
+        "entryTime",
+        "status"
+      ]
+    },
+    "AccessLog": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "AccessLog",
+      "type": "object",
+      "description": "Represents an access log entry for a document.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the AccessLog entity."
+        },
+        "documentId": {
+          "type": "string",
+          "description": "Reference to Document. (Relationship: Document 1:N AccessLog)"
+        },
+        "userId": {
+          "type": "string",
+          "description": "Reference to User. (Relationship: User 1:N AccessLog)"
+        },
+        "accessTime": {
+          "type": "string",
+          "description": "Timestamp indicating when the document was accessed.",
+          "format": "date-time"
+        },
+        "ipAddress": {
+          "type": "string",
+          "description": "IP address from which the document was accessed."
+        },
+        "location": {
+          "type": "string",
+          "description": "Location from which the document was accessed (e.g., city, country)."
+        },
+        "accessType": {
+          "type": "string",
+          "description": "Type of access (e.g., QR code scan, direct access)."
+        }
+      },
+      "required": [
+        "id",
+        "documentId",
+        "userId",
+        "accessTime",
+        "ipAddress"
+      ]
+    }
+  },
+  "auth": {
+    "providers": [
+      "password",
+      "anonymous"
+    ]
+  },
+  "firestore": {
+    "structure": [
+      {
+        "path": "/users/{userId}",
+        "definition": {
+          "entityName": "User",
+          "schema": {
+            "$ref": "#/backend/entities/User"
+          },
+          "description": "Stores user profiles.  Root path for user-owned data.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "The unique identifier for the user."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/users/{userId}/documents/{documentId}",
+        "definition": {
+          "entityName": "Document",
+          "schema": {
+            "$ref": "#/backend/entities/Document"
+          },
+          "description": "Stores documents owned by a specific user.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "The unique identifier for the user."
+            },
+            {
+              "name": "documentId",
+              "description": "The unique identifier for the document."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/users/{userId}/documents/{documentId}/qrCodes/{qrCodeId}",
+        "definition": {
+          "entityName": "QrCode",
+          "schema": {
+            "$ref": "#/backend/entities/QrCode"
+          },
+          "description": "Stores QR codes associated with a specific document.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "The unique identifier for the user."
+            },
+            {
+              "name": "documentId",
+              "description": "The unique identifier for the document."
+            },
+            {
+              "name": "qrCodeId",
+              "description": "The unique identifier for the QR code."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/users/{userId}/documents/{documentId}/accessLogs/{accessLogId}",
+        "definition": {
+          "entityName": "AccessLog",
+          "schema": {
+            "$ref": "#/backend/entities/AccessLog"
+          },
+          "description": "Stores access logs for a specific document.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "The unique identifier for the user."
+            },
+            {
+              "name": "documentId",
+              "description": "The unique identifier for the document."
+            },
+            {
+              "name": "accessLogId",
+              "description": "The unique identifier for the access log."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/queues/{queueId}",
+        "definition": {
+          "entityName": "Queue",
+          "schema": {
+            "$ref": "#/backend/entities/Queue"
+          },
+          "description": "Stores information about each queue.",
+          "params": [
+            {
+              "name": "queueId",
+              "description": "The unique identifier for the queue."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/queues/{queueId}/queueEntries/{queueEntryId}",
+        "definition": {
+          "entityName": "QueueEntry",
+          "schema": {
+            "$ref": "#/backend/entities/QueueEntry"
+          },
+          "description": "Stores entries for a specific queue.",
+          "params": [
+            {
+              "name": "queueId",
+              "description": "The unique identifier for the queue."
+            },
+            {
+              "name": "queueEntryId",
+              "description": "The unique identifier for the queue entry."
+            }
+          ]
+        }
+      }
+    ],
+    "reasoning": "The Firestore data structure is designed to ensure security, scalability, and maintainability for the SecurePass application. It leverages path-based ownership for user-related data and denormalization where necessary to avoid complex security rules and maintain authorization independence. This design ensures atomic operations and simplifies debugging.\n\n*   **Users Collection:** Stores user profiles, authenticated via Firebase Auth.\n*   **User-Owned Documents:** Documents are stored as subcollections under each user's document (`/users/{userId}/documents/{documentId}`). This establishes clear ownership, simplifying security rules.\n*   **QR Codes:** Stored as subcollections under each document (`/users/{userId}/documents/{documentId}/qrCodes/{qrCodeId}`). This maintains the relationship between documents and their associated QR codes.\n*   **Access Logs:** Stored as subcollections under each document (`/users/{userId}/documents/{documentId}/accessLogs/{accessLogId}`).\n*   **Queues and Queue Entries:** Queues are stored in a top-level `/queues` collection.  Queue entries are stored in `/queues/{queueId}/queueEntries/{queueEntryId}`.\n\n**Authorization Independence (Denormalization):**\n\n*   No denormalization is needed since the application structure uses path-based ownership for documents, QR codes, and access logs. The `userId` field within the `documents` collection establishes the relationship between a user and their documents.\n\n**QAPs (Rules are not Filters):**\n\n*   The path-based ownership (`/users/{userId}/documents/{documentId}`) ensures that listing documents is secure, as rules can easily enforce that only the owner (identified by `request.auth.uid`) can access their documents.\n*   The segregation of queues and queue entries into dedicated collections also ensures secure list operations. Security rules can be applied to allow listing of queues based on administrative roles or other criteria, without exposing unrelated data.\n\nThis design prioritizes clarity, security, and scalability, making it easier to implement robust security rules and maintain the application over time."
+  }
+}
