@@ -192,6 +192,10 @@
           "type": "string",
           "description": "Reference to the User who this ticket belongs to."
         },
+        "userName": {
+          "type": "string",
+          "description": "The name of the user (denormalized for admin view)."
+        },
         "ticketNumber": {
           "type": "number",
           "description": "The user's ticket number for this queue."
@@ -216,6 +220,7 @@
         "id",
         "queueId",
         "userId",
+        "userName",
         "ticketNumber",
         "entryTime",
         "status"

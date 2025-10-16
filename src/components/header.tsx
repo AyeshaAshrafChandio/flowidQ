@@ -1,10 +1,12 @@
 'use client';
 
 import { useUser, useAuth } from '@/firebase';
-import { QrCode, LogOut } from 'lucide-react';
+import { QrCode, LogOut, ShieldCheck } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from './ui/button';
 import { useRouter } from 'next/navigation';
+
+const ADMIN_EMAIL = "admin@flowidq.com";
 
 export default function Header() {
   const { user, isUserLoading } = useUser();
@@ -24,7 +26,7 @@ export default function Header() {
         <QrCode className="h-8 w-8 text-primary" />
         <span className="text-2xl font-bold">FlowIDQ</span>
       </Link>
-      <nav className="flex items-center space-x-4">
+      <nav className="flex items-center space-x-1 md:space-x-4">
         {!isUserLoading &&
           (user ? (
             <>
@@ -40,6 +42,14 @@ export default function Header() {
               <Link href="/my-tickets">
                 <Button variant="ghost">My Tickets</Button>
               </Link>
+              {user.email === ADMIN_EMAIL && (
+                 <Link href="/admin">
+                    <Button variant="ghost" className="text-primary hover:text-primary/90">
+                        <ShieldCheck className="mr-2 h-4 w-4" />
+                        Admin
+                    </Button>
+                </Link>
+              )}
               <Button variant="ghost" onClick={handleLogout}>
                 <LogOut className="mr-2 h-4 w-4" />
                 Log Out
