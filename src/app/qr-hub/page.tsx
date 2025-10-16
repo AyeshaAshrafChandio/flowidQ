@@ -18,58 +18,46 @@ export default function QrHub() {
   const router = useRouter();
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const scanAnimationRef = useRef<number>();
-  const [hasCameraPermission, setHasCameraPermission] = useState<boolean | null>(null);
+  const animationFrameId = useRef<number>();
+
+  const [hasCameraPermission, setHasCameraPermission] = useState(true);
   const [isScanning, setIsScanning] = useState(false);
   const [isProcessingQr, setIsProcessingQr] = useState(false);
 
-
   const stopScan = useCallback(() => {
-    if (scanAnimationRef.current) {
-      cancelAnimationFrame(scanAnimationRef.current);
-      scanAnimationRef.current = undefined;
+    setIsScanning(false);
+    if (animationFrameId.current) {
+      cancelAnimationFrame(animationFrameId.current);
+      animationFrameId.current = undefined;
     }
     if (videoRef.current && videoRef.current.srcObject) {
       const stream = videoRef.current.srcObject as MediaStream;
       stream.getTracks().forEach(track => track.stop());
       videoRef.current.srcObject = null;
     }
-    setIsScanning(false);
   }, []);
-  
-  useEffect(() => {
-    if (!isUserLoading && !user) {
-      router.push('/login');
-    }
-    
-    // Cleanup function to stop scanning when the component unmounts or user navigates away
-    return () => {
-      stopScan();
-    };
-  }, [user, isUserLoading, router, stopScan]);
 
   const tick = useCallback(() => {
+    if (isProcessingQr) return;
+    
     if (videoRef.current?.readyState === videoRef.current?.HAVE_ENOUGH_DATA && canvasRef.current) {
       const video = videoRef.current;
       const canvas = canvasRef.current;
-      const ctx = canvas.getContext('2d');
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
 
       if (ctx) {
         canvas.height = video.videoHeight;
         canvas.width = video.videoWidth;
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
         const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-        const code = jsQR(imageData.data, imageData.width, imageData.height, {
-          inversionAttempts: "dontInvert",
-        });
+        const code = jsQR(imageData.data, imageData.width, imageData.height);
 
-        if (code && code.data) {
+        if (code?.data) {
           setIsProcessingQr(true);
           stopScan();
           toast.success('QR Code detected! Redirecting...');
           
           try {
-            // Validate and navigate
             const url = new URL(code.data);
             if (url.origin === window.location.origin) {
                 router.push(url.pathname + url.search);
@@ -81,46 +69,53 @@ export default function QrHub() {
              toast.error('Invalid QR code data.');
              setIsProcessingQr(false);
           }
-          return; // Stop the loop
+          return;
         }
       }
     }
-    if (scanAnimationRef.current !== undefined && !isProcessingQr) {
-      scanAnimationRef.current = requestAnimationFrame(tick);
+    if (isScanning) {
+      animationFrameId.current = requestAnimationFrame(tick);
     }
-  }, [router, stopScan, isProcessingQr]);
+  }, [isScanning, isProcessingQr, router, stopScan]);
 
-
-  const startScan = async () => {
+  const startScan = useCallback(async () => {
     if (isScanning || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      toast.error('Camera not supported or already active.');
-      setHasCameraPermission(false);
+      toast.error('Camera not supported on this device.');
       return;
     }
     
     setIsScanning(true);
     setIsProcessingQr(false);
-    setHasCameraPermission(null); 
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
       setHasCameraPermission(true);
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
-        scanAnimationRef.current = requestAnimationFrame(tick);
+        videoRef.current.onloadedmetadata = () => {
+          animationFrameId.current = requestAnimationFrame(tick);
+        };
       }
     } catch (error) {
       console.error('Error accessing camera:', error);
       setHasCameraPermission(false);
       setIsScanning(false);
-      if ((error as Error).name === 'NotAllowedError' || (error as Error).name === 'PermissionDeniedError') {
-         toast.error('Camera access denied. Please enable it in your browser settings.');
-      } else {
-         toast.error('Could not access camera. It might be in use by another application.');
-      }
+      toast({
+        variant: 'destructive',
+        title: 'Camera Access Denied',
+        description: 'Please enable camera permissions in your browser settings to use this feature.',
+      });
     }
-  };
-  
+  }, [isScanning, tick]);
+
+  useEffect(() => {
+    if (!isUserLoading && !user) {
+      router.push('/login');
+    }
+    return () => {
+      stopScan();
+    };
+  }, [user, isUserLoading, router, stopScan]);
 
   if (isUserLoading || !user) {
     return (
@@ -153,31 +148,31 @@ export default function QrHub() {
               </div>
             </CardHeader>
             <CardContent className="flex flex-col items-center justify-center">
-               <canvas ref={canvasRef} className="hidden" />
+              <canvas ref={canvasRef} className="hidden" />
               {isScanning ? (
                 <>
                   <div className="w-full aspect-video bg-secondary/50 rounded-md flex items-center justify-center mb-4 relative overflow-hidden">
                     <video ref={videoRef} className="w-full h-full object-cover" autoPlay muted playsInline />
-                    {hasCameraPermission === false && (
+                    {!hasCameraPermission && (
                        <div className="absolute inset-0 flex flex-col items-center justify-center bg-background/80 p-4 text-center">
                           <VideoOff className="h-16 w-16 text-muted-foreground mb-4" />
                           <Alert variant="destructive">
                             <AlertTitle>Camera Access Required</AlertTitle>
                             <AlertDescription>
-                              Please allow camera access in your browser settings to use this feature. You may need to refresh the page after granting permission.
+                              Please allow camera access in your browser settings. You may need to refresh the page after granting permission.
                             </AlertDescription>
                           </Alert>
                        </div>
                     )}
-                     {hasCameraPermission === true && !isProcessingQr && (
+                    {hasCameraPermission && !isProcessingQr && (
                       <div className="absolute inset-0 border-4 border-primary/50 rounded-md animate-pulse"></div>
-                     )}
-                     {(hasCameraPermission === null || isProcessingQr) && (
+                    )}
+                    {isProcessingQr && (
                         <div className="absolute inset-0 flex flex-col items-center justify-center bg-background/80">
                             <Loader2 className="h-16 w-16 animate-spin text-primary" />
-                            {isProcessingQr && <p className="mt-4 text-sm text-primary-foreground">Processing QR Code...</p>}
+                            <p className="mt-4 text-sm text-primary-foreground">Processing QR Code...</p>
                         </div>
-                     )}
+                    )}
                   </div>
                   <Button onClick={stopScan} variant="outline" disabled={isProcessingQr}>Cancel Scan</Button>
                 </>
@@ -244,5 +239,3 @@ export default function QrHub() {
     </div>
   );
 }
-
-    
