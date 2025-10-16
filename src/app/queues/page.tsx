@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
+import { useUser, useFirestore } from '@/firebase';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import Header from '@/components/header';
@@ -24,12 +24,14 @@ export default function QueuesPage() {
   const [userJoinedQueueIds, setUserJoinedQueueIds] = useState<string[]>([]);
 
   useEffect(() => {
-    if (!firestore || !user?.uid) {
-        if (!isUserLoading) {
-            setIsLoadingQueues(false);
-        }
-        return;
-    };
+    // Wait until user loading is complete and we have a user and firestore instance
+    if (isUserLoading || !user || !firestore) {
+      // If loading is done but we have no user, stop the loading spinner.
+      if (!isUserLoading) {
+        setIsLoadingQueues(false);
+      }
+      return;
+    }
 
     setIsLoadingQueues(true);
     
@@ -59,7 +61,7 @@ export default function QueuesPage() {
     };
 
     fetchData();
-  }, [firestore, user?.uid, isUserLoading]);
+  }, [firestore, user, isUserLoading]);
 
 
   const handleJoinQueue = async (queue: any) => {
