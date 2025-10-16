@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useMemo } from 'react';
 import Header from '@/components/header';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, Ticket, Users, Hash, History, QrCode } from 'lucide-react';
+import { Loader2, History, QrCode } from 'lucide-react';
 import { collection, query, where, collectionGroup, orderBy } from 'firebase/firestore';
 
 export default function RecordsPage() {
@@ -88,7 +88,7 @@ export default function RecordsPage() {
                         </div>
                     )}
                     {!isLoading && enrichedEntries && enrichedEntries.length > 0 ? (
-                        <div className="space-y-4 max-h-96 overflow-y-auto pr-2">
+                        <div className="space-y-4 max-h-[30rem] overflow-y-auto pr-2">
                            {enrichedEntries.map(entry => (
                              <div key={entry.id} className="p-4 rounded-lg bg-secondary/50">
                                 <div className="flex justify-between items-start">
@@ -98,6 +98,7 @@ export default function RecordsPage() {
                                     </div>
                                     <span className={`capitalize text-xs font-semibold px-2 py-1 rounded-full ${
                                         entry.status === 'waiting' ? 'bg-yellow-500/20 text-yellow-400' :
+                                        entry.status === 'serving' ? 'bg-blue-500/20 text-blue-400' :
                                         entry.status === 'served' ? 'bg-green-500/20 text-green-400' :
                                         entry.status === 'cancelled' ? 'bg-red-500/20 text-red-400' :
                                         'bg-gray-500/20 text-gray-400'
@@ -108,14 +109,18 @@ export default function RecordsPage() {
                                 <div className="flex justify-between items-end mt-2">
                                     <p className="text-sm text-muted-foreground">Your Ticket: <span className="font-bold text-primary">#{entry.ticketNumber}</span></p>
                                     <p className="text-xs text-muted-foreground">
-                                        {new Date(entry.entryTime.seconds * 1000).toLocaleString()}
+                                        {entry.entryTime ? new Date(entry.entryTime.seconds * 1000).toLocaleString() : 'Just now'}
                                     </p>
                                 </div>
                              </div>
                            ))}
                         </div>
                     ) : (
-                        !isLoading && <p className="text-muted-foreground text-center py-8">You have not joined any queues yet.</p>
+                        !isLoading && <div className="text-center py-12 text-muted-foreground">
+                            <History className="mx-auto h-12 w-12" />
+                            <h3 className="mt-4 text-lg font-semibold">No Queue History</h3>
+                            <p className="mt-2 text-sm">You have not joined any queues yet.</p>
+                        </div>
                     )}
                 </CardContent>
             </Card>
@@ -127,10 +132,10 @@ export default function RecordsPage() {
                     <CardDescription>A record of all QR codes you have generated to share documents.</CardDescription>
                 </CardHeader>
                 <CardContent>
-                    <div className="text-center py-12">
-                        <QrCode className="mx-auto h-12 w-12 text-muted-foreground" />
+                    <div className="text-center py-12 text-muted-foreground">
+                        <QrCode className="mx-auto h-12 w-12" />
                         <h3 className="mt-4 text-lg font-semibold">No Shared History</h3>
-                        <p className="mt-2 text-sm text-muted-foreground">This feature is coming soon. You'll be able to see a history of your shared QR codes here.</p>
+                        <p className="mt-2 text-sm">This feature is coming soon. You'll be able to see a history of your shared QR codes here.</p>
                     </div>
                 </CardContent>
             </Card>

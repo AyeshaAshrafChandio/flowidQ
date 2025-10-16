@@ -14,6 +14,7 @@ export default function MyTicketsPage() {
   const router = useRouter();
   const firestore = useFirestore();
 
+  // Get all active queue entries for the current user across all queues
   const userQueueEntriesQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
     return query(
@@ -24,12 +25,14 @@ export default function MyTicketsPage() {
   }, [firestore, user]);
   const { data: queueEntries, isLoading: isLoadingEntries } = useCollection(userQueueEntriesQuery);
   
+  // Get all queues to enrich the ticket data
   const allQueuesQuery = useMemoFirebase(() => {
     if(!firestore) return null;
     return query(collection(firestore, 'queues'));
   }, [firestore]);
   const { data: allQueues, isLoading: isLoadingQueues } = useCollection(allQueuesQuery);
   
+  // Combine the user's tickets with the details of the queue they belong to
   const enrichedEntries = useMemo(() => {
     if (!queueEntries || !allQueues) return [];
     
@@ -41,8 +44,9 @@ export default function MyTicketsPage() {
         ...entry,
         queueName: queueDetails?.name || 'Loading...',
         currentNumber: queueDetails?.currentNumber || 0,
+        locationName: queueDetails?.locationName || 'Unknown Location'
       };
-    }).filter(entry => entry.queueName !== 'Loading...');
+    }).filter(entry => entry.queueName !== 'Loading...'); // Filter out entries where queue details haven't loaded
   }, [queueEntries, allQueues]);
 
 
@@ -82,25 +86,27 @@ export default function MyTicketsPage() {
         {!isLoading && enrichedEntries && enrichedEntries.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {enrichedEntries.map((entry) => {
-                const peopleAhead = Math.max(0, entry.ticketNumber - entry.currentNumber - 1);
+                const peopleAhead = Math.max(0, entry.ticketNumber - (entry.currentNumber || 0) - 1);
                 return (
                     <Card key={entry.id} className="glowing-border flex flex-col">
                         <CardHeader>
                             <CardTitle>{entry.queueName}</CardTitle>
-                            <CardDescription>Your ticket for this queue.</CardDescription>
+                            <CardDescription>{entry.locationName}</CardDescription>
                         </CardHeader>
-                        <CardContent className="flex-grow space-y-4">
-                            <div className="flex items-center justify-between text-lg">
-                                <span className="flex items-center text-muted-foreground"><Ticket className="mr-2 h-5 w-5" /> Your Number</span>
-                                <span className="font-bold text-2xl text-primary">#{entry.ticketNumber}</span>
+                        <CardContent className="flex-grow flex flex-col justify-between space-y-4">
+                            <div className="text-center">
+                                <p className="text-lg text-muted-foreground">Your Number</p>
+                                <p className="text-7xl font-bold text-primary">#{entry.ticketNumber}</p>
                             </div>
-                            <div className="flex items-center justify-between text-sm">
-                                <span className="flex items-center text-muted-foreground"><Hash className="mr-2 h-4 w-4" /> Now Serving</span>
-                                <span className="font-bold">#{entry.currentNumber}</span>
-                            </div>
-                             <div className="flex items-center justify-between text-sm">
-                                <span className="flex items-center text-muted-foreground"><Users className="mr-2 h-4 w-4" /> People Ahead</span>
-                                <span className="font-bold">{peopleAhead}</span>
+                            <div className='space-y-2'>
+                                <div className="flex items-center justify-between text-lg">
+                                    <span className="flex items-center text-muted-foreground"><Hash className="mr-2 h-5 w-5" /> Now Serving</span>
+                                    <span className="font-bold">#{entry.currentNumber || 0}</span>
+                                </div>
+                                <div className="flex items-center justify-between text-lg">
+                                    <span className="flex items-center text-muted-foreground"><Users className="mr-2 h-5 w-5" /> People Ahead</span>
+                                    <span className="font-bold">{peopleAhead}</span>
+                                </div>
                             </div>
                         </CardContent>
                     </Card>
@@ -109,10 +115,13 @@ export default function MyTicketsPage() {
           </div>
         ) : (
           !isLoading && (
-            <div className="text-center py-16">
+            <div className="text-center py-16 border-2 border-dashed border-secondary rounded-lg">
               <Ticket className="mx-auto h-16 w-16 text-muted-foreground" />
               <h3 className="mt-6 text-xl font-semibold">You have no active tickets.</h3>
-              <p className="mt-2 text-md text-muted-foreground">Join a queue from the 'Queues' page to get started.</p>
+              <p className="mt-2 text-md text-muted-foreground">Join a queue from the 'Queues' page to get your ticket.</p>
+                <Link href="/queues" passHref>
+                    <Button className="mt-6">View Queues</Button>
+                </Link>
             </div>
           )
         )}

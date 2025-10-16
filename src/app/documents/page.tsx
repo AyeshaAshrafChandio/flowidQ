@@ -69,7 +69,6 @@ export default function DocumentsPage() {
         toast.error('File is too large. Maximum size is 10MB.');
         return;
       }
-      setSelectedFile(file);
       handleUpload(file);
     }
   };
@@ -116,8 +115,8 @@ export default function DocumentsPage() {
             isEncrypted: true, 
             userId: user.uid,
           };
-
-          const docRefPromise = addDoc(documentsColRef, docData).catch(err => {
+          
+          const docRef = await addDoc(documentsColRef, docData).catch(err => {
               errorEmitter.emit('permission-error', new FirestorePermissionError({
                   path: documentsColRef.path,
                   operation: 'create',
@@ -126,13 +125,7 @@ export default function DocumentsPage() {
               throw err; 
           });
 
-          toast.promise(docRefPromise, {
-            loading: 'Saving document metadata...',
-            success: 'Document uploaded successfully!',
-            error: 'Failed to save document metadata.',
-          });
-          
-          const docRef = await docRefPromise;
+          toast.success('Document uploaded successfully!');
 
           // Start AI analysis only if the file is an image
           if (file.type.startsWith('image/')) {
@@ -186,7 +179,10 @@ export default function DocumentsPage() {
     const docRef = doc(firestore, 'users', user.uid, 'documents', docId);
     const storageRef = ref(storage, storagePath);
 
+    const toastId = toast.loading("Deleting document...");
+
     try {
+      // First, delete the Firestore document
       await deleteDoc(docRef).catch(err => {
         errorEmitter.emit('permission-error', new FirestorePermissionError({
             path: docRef.path,
@@ -194,13 +190,18 @@ export default function DocumentsPage() {
         }));
          throw err;
       });
+
+      // Then, delete the file from Storage
       await deleteObject(storageRef);
-      toast.success('Document deleted successfully.');
+
+      toast.success('Document deleted successfully.', { id: toastId });
       setSelectedDocs(prev => prev.filter(id => id !== docId));
     } catch (error) {
       console.error('Error deleting document:', error);
        if (!String(error).includes('permission-error')) {
-        toast.error('Failed to delete document.');
+        toast.error('Failed to delete document.', { id: toastId });
+      } else {
+        toast.dismiss(toastId);
       }
     }
   };
@@ -223,22 +224,26 @@ export default function DocumentsPage() {
     
     const docRef = doc(firestore, 'users', user.uid, 'documents', docId);
     const updateData = { name: editingDocName };
+    const toastId = toast.loading("Renaming document...");
     
-    updateDoc(docRef, updateData).catch(error => {
-      errorEmitter.emit('permission-error', new FirestorePermissionError({
-          path: docRef.path,
-          operation: 'update',
-          requestResourceData: updateData
-      }));
-      throw error;
-    }).then(() => {
-        toast.success('Document renamed successfully.');
+    try {
+        await updateDoc(docRef, updateData).catch(error => {
+          errorEmitter.emit('permission-error', new FirestorePermissionError({
+              path: docRef.path,
+              operation: 'update',
+              requestResourceData: updateData
+          }));
+          throw error;
+        });
+        toast.success('Document renamed successfully.', { id: toastId });
         handleCancelEdit();
-    }).catch(error => {
+    } catch(error) {
         if (!String(error).includes('permission-error')) {
-            toast.error('Failed to rename document.');
+            toast.error('Failed to rename document.', { id: toastId });
+        } else {
+            toast.dismiss(toastId);
         }
-    });
+    }
   };
 
   const handleGenerateQrCode = async () => {
@@ -335,7 +340,10 @@ export default function DocumentsPage() {
 
         {isUploading && selectedFile && (
           <div className="mb-8 p-4 rounded-lg border">
-            <p className="font-medium mb-2">Uploading: {selectedFile.name}</p>
+            <div className='flex justify-between items-center'>
+                <p className="font-medium mb-2">Uploading: {selectedFile.name}</p>
+                <p className="text-sm text-muted-foreground">{uploadProgress?.toFixed(0)}%</p>
+            </div>
             <div className="relative h-2 w-full overflow-hidden rounded-full bg-secondary">
               <div
                 className="h-full w-full flex-1 bg-primary transition-all"
@@ -379,6 +387,7 @@ export default function DocumentsPage() {
                                     onChange={(e) => setEditingDocName(e.target.value)}
                                     className="h-8"
                                     autoFocus
+                                    onKeyDown={(e) => e.key === 'Enter' && handleUpdateName(doc.id)}
                                 />
                                 </div>
                             ) : (
@@ -402,12 +411,12 @@ export default function DocumentsPage() {
                                 </>
                             ) : (
                                 <>
-                                <Button variant="ghost" size="icon" onClick={() => handleEdit(doc)}>
+                                <Button variant="ghost" size="icon" onClick={() => handleEdit(doc)} disabled={!!editingDocId}>
                                     <FileEdit className="h-4 w-4" />
                                 </Button>
                                 <AlertDialog>
                                     <AlertDialogTrigger asChild>
-                                    <Button variant="ghost" size="icon">
+                                    <Button variant="ghost" size="icon" disabled={!!editingDocId}>
                                         <Trash2 className="h-4 w-4 text-red-500 hover:text-red-400" />
                                     </Button>
                                     </AlertDialogTrigger>
@@ -463,3 +472,5 @@ export default function DocumentsPage() {
     </div>
   );
 }
+
+    
