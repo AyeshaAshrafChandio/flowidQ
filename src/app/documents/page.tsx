@@ -15,6 +15,7 @@ import toast from 'react-hot-toast';
 import QRCode from 'qrcode.react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogClose } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
+import { analyzeDocument } from '@/ai/flows/document-analyzer-flow';
 
 
 export default function DocumentsPage() {
@@ -47,6 +48,15 @@ export default function DocumentsPage() {
 
   const handleFileSelect = () => {
     fileInputRef.current?.click();
+  };
+  
+  const fileToDataURI = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+    });
   };
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -88,7 +98,7 @@ export default function DocumentsPage() {
       () => {
         getDownloadURL(uploadTask.snapshot.ref).then(async (downloadURL) => {
           const documentsColRef = collection(firestore, 'users', user.uid, 'documents');
-          await addDoc(documentsColRef, {
+          const docRef = await addDoc(documentsColRef, {
             name: file.name,
             fileUrl: downloadURL,
             storagePath: storageRef.fullPath,
@@ -99,6 +109,28 @@ export default function DocumentsPage() {
           });
 
           toast.success('Document uploaded successfully!');
+          
+          if (file.type.startsWith('image/')) {
+            toast.loading('AI is analyzing your document...');
+            try {
+              const dataUri = await fileToDataURI(file);
+              const analysisResult = await analyzeDocument({ photoDataUri: dataUri });
+              
+              await updateDoc(docRef, {
+                  aiAnalysis: analysisResult
+              });
+              
+              toast.dismiss();
+              toast.success(`AI detected: ${analysisResult.documentType}`);
+              console.log('AI Analysis:', analysisResult);
+
+            } catch (aiError) {
+              console.error("AI analysis failed:", aiError);
+              toast.dismiss();
+              toast.error('AI analysis failed.');
+            }
+          }
+          
           setIsUploading(false);
           setUploadProgress(null);
           setSelectedFile(null);
@@ -159,17 +191,12 @@ export default function DocumentsPage() {
     }
 
     try {
-      // This is a simplified example. In a real app, you'd likely create a dedicated collection
-      // for QR codes to manage them, associate them with users, and handle expiration.
       const qrData = {
         userId: user.uid,
         documentIds: selectedDocs,
         timestamp: Date.now(),
       };
       
-      // For this example, we'll just stringify the data. 
-      // In a real app, you would create a verification page URL and include a unique ID
-      // that can be used to look up the QR data in Firestore.
       const qrValue = `${window.location.origin}/verify?data=${btoa(JSON.stringify(qrData))}`;
       setGeneratedQrValue(qrValue);
 
