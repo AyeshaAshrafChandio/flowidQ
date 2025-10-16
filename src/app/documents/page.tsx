@@ -102,6 +102,7 @@ export default function DocumentsPage() {
         }
       },
       async () => {
+        let docRef;
         const toastId = toast.loading('Processing document...');
         try {
           const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
@@ -117,7 +118,7 @@ export default function DocumentsPage() {
             userId: user.uid,
           };
           
-          const docRef = await addDoc(documentsColRef, docData).catch(err => {
+          docRef = await addDoc(documentsColRef, docData).catch(err => {
               errorEmitter.emit('permission-error', new FirestorePermissionError({
                   path: documentsColRef.path,
                   operation: 'create',
@@ -126,7 +127,7 @@ export default function DocumentsPage() {
               throw err; 
           });
 
-          toast.success('Document uploaded successfully!', { id: toastId });
+          toast.success('Document uploaded successfully ✅', { id: toastId });
 
           // Start AI analysis only if the file is an image
           if (file.type.startsWith('image/')) {
@@ -475,5 +476,3 @@ export default function DocumentsPage() {
     </div>
   );
 }
-
-    
