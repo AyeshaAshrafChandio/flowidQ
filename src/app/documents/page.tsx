@@ -131,6 +131,7 @@ export default function DocumentsPage() {
             }
           }
           
+          // Reset state after everything is done
           setIsUploading(false);
           setUploadProgress(null);
           setSelectedFile(null);
@@ -232,7 +233,7 @@ export default function DocumentsPage() {
           <div className="flex gap-2">
              <Dialog onOpenChange={(isOpen) => !isOpen && setGeneratedQrValue(null)}>
               <DialogTrigger asChild>
-                <Button onClick={handleGenerateQrCode} disabled={selectedDocs.length === 0}>
+                <Button onClick={handleGenerateQrCode} disabled={selectedDocs.length === 0 || isUploading}>
                   <QrCode className="mr-2 h-4 w-4" />
                   Generate QR Code
                 </Button>
