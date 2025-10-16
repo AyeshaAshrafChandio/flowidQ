@@ -29,8 +29,7 @@ export default function AdminPage() {
   const selectedQueueEntriesQuery = useMemoFirebase(() => {
     if(!firestore || !selectedQueueId) return null;
     return query(
-      collection(firestore, 'queueEntries'), 
-      where('queueId', '==', selectedQueueId),
+      collection(firestore, 'queues', selectedQueueId, 'queueEntries'), 
       where('status', '==', 'waiting'),
       orderBy('ticketNumber')
     );

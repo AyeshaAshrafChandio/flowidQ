@@ -6,7 +6,7 @@ import { useEffect } from 'react';
 import Header from '@/components/header';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Loader2, Ticket, Users, Hash, UserCircle } from 'lucide-react';
-import { collection, query, where } from 'firebase/firestore';
+import { collection, query, where, collectionGroup } from 'firebase/firestore';
 
 export default function MyTicketsPage() {
   const { user, isUserLoading } = useUser();
@@ -15,8 +15,10 @@ export default function MyTicketsPage() {
 
   const userQueueEntriesQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
+    // Use a collection group query to find all of the user's tickets
+    // across all queues.
     return query(
-      collection(firestore, 'queueEntries'),
+      collectionGroup(firestore, 'queueEntries'),
       where('userId', '==', user.uid),
       where('status', '==', 'waiting')
     );
@@ -24,8 +26,6 @@ export default function MyTicketsPage() {
 
   const { data: queueEntries, isLoading: isLoadingEntries } = useCollection(userQueueEntriesQuery);
   
-  // We need to fetch the details for each queue these entries belong to
-  // This is a simplified approach for now. A more optimized approach might involve denormalization.
   const allQueuesQuery = useMemoFirebase(() => {
     if(!firestore) return null;
     return query(collection(firestore, 'queues'));

@@ -65,6 +65,7 @@ export default function QueuesPage() {
       }
 
       const queueRef = doc(firestore, 'queues', queue.id);
+      const queueEntriesRef = collection(firestore, 'queues', queue.id, 'queueEntries');
       let newTicketNumber = 0;
 
       await runTransaction(firestore, async (transaction) => {
@@ -81,18 +82,18 @@ export default function QueuesPage() {
           lastTicketNumber: newTicketNumber,
           totalInQueue: (queueData.totalInQueue || 0) + 1,
         });
-      });
 
-      // After the transaction, create the user's entry in the global collection
-      await addDoc(collection(firestore, 'queueEntries'), {
-          userId: user.uid,
-          ticketNumber: newTicketNumber,
-          entryTime: serverTimestamp(),
-          status: 'waiting',
-          userName: user.displayName || 'Anonymous',
-          queueId: queue.id,
-      });
+        // Create the user's entry in the subcollection
+        transaction.set(doc(queueEntriesRef), {
+            userId: user.uid,
+            ticketNumber: newTicketNumber,
+            entryTime: serverTimestamp(),
+            status: 'waiting',
+            userName: user.displayName || 'Anonymous',
+            queueId: queue.id,
+        });
 
+      });
       
       toast.success(`Successfully joined "${queue.name}" with ticket #${newTicketNumber}!`);
       setUserJoinedQueueIds(prev => [...prev, queue.id]);
