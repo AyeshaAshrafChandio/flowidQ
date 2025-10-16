@@ -63,7 +63,6 @@ export default function AuthForm({ mode }: AuthFormProps) {
         
         const userDocRef = doc(firestore, 'users', user.uid);
         setDocumentNonBlocking(userDocRef, {
-            uid: user.uid,
             displayName: name,
             email: user.email,
             createdAt: serverTimestamp(),
