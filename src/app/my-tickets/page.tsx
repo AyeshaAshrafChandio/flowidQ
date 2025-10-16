@@ -1,8 +1,9 @@
+
 'use client';
 
 import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
 import { useRouter } from 'next/navigation';
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import Header from '@/components/header';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Loader2, Ticket, Users, Hash, UserCircle } from 'lucide-react';
@@ -15,8 +16,6 @@ export default function MyTicketsPage() {
 
   const userQueueEntriesQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
-    // Use a collection group query to find all of the user's tickets
-    // across all queues.
     return query(
       collectionGroup(firestore, 'queueEntries'),
       where('userId', '==', user.uid),
@@ -33,7 +32,7 @@ export default function MyTicketsPage() {
 
   const { data: allQueues, isLoading: isLoadingQueues } = useCollection(allQueuesQuery);
   
-  const enrichedEntries = useMemoFirebase(() => {
+  const enrichedEntries = useMemo(() => {
     if (!queueEntries || !allQueues) return [];
     return queueEntries.map(entry => {
       const queueDetails = allQueues.find(q => q.id === entry.queueId);
@@ -124,3 +123,5 @@ export default function MyTicketsPage() {
     </div>
   );
 }
+
+    

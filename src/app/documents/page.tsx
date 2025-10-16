@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
@@ -98,7 +99,6 @@ export default function DocumentsPage() {
         setSelectedFile(null);
       },
       async () => {
-        let docRef;
         try {
           const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
           const documentsColRef = collection(firestore, 'users', user.uid, 'documents');
@@ -113,13 +113,13 @@ export default function DocumentsPage() {
             userId: user.uid,
           };
 
-          docRef = await addDoc(documentsColRef, docData).catch(err => {
+          const docRef = await addDoc(documentsColRef, docData).catch(err => {
               errorEmitter.emit('permission-error', new FirestorePermissionError({
                   path: documentsColRef.path,
                   operation: 'create',
                   requestResourceData: docData
               }));
-              throw err; // Re-throw to be caught by the outer try-catch
+              throw err; 
           });
           toast.success('Document uploaded successfully!');
 
@@ -136,6 +136,7 @@ export default function DocumentsPage() {
                     operation: 'update',
                     requestResourceData: aiData
                 }));
+                 throw err;
               });
               
               toast.dismiss();
@@ -145,13 +146,15 @@ export default function DocumentsPage() {
             } catch (aiError) {
               console.error("AI analysis failed:", aiError);
               toast.dismiss();
-              toast.error('AI analysis failed.');
+              if (!String(aiError).includes('permission-error')) {
+                 toast.error('AI analysis failed.');
+              }
             }
           }
         } catch (error) {
-            console.error("Error getting download URL or saving to Firestore:", error);
+            console.error("Error during post-upload process:", error);
             if (!String(error).includes('permission-error')) {
-              toast.error('Failed to save document.');
+              toast.error('Failed to save document metadata.');
             }
         } finally {
             setIsUploading(false);
@@ -177,13 +180,16 @@ export default function DocumentsPage() {
             path: docRef.path,
             operation: 'delete',
         }));
+         throw err;
       });
       await deleteObject(storageRef);
       toast.success('Document deleted successfully.');
       setSelectedDocs(prev => prev.filter(id => id !== docId));
     } catch (error) {
       console.error('Error deleting document:', error);
-      toast.error('Failed to delete document.');
+       if (!String(error).includes('permission-error')) {
+        toast.error('Failed to delete document.');
+      }
     }
   };
   
@@ -207,7 +213,6 @@ export default function DocumentsPage() {
     const updateData = { name: editingDocName };
     
     updateDoc(docRef, updateData).catch(error => {
-      console.error('Error updating document name:', error);
       errorEmitter.emit('permission-error', new FirestorePermissionError({
           path: docRef.path,
           operation: 'update',
@@ -424,3 +429,5 @@ export default function DocumentsPage() {
     </div>
   );
 }
+
+    

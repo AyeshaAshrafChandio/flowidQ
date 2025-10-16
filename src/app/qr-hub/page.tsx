@@ -24,12 +24,6 @@ export default function QrHub() {
   const [isProcessingQr, setIsProcessingQr] = useState(false);
 
 
-  useEffect(() => {
-    if (!isUserLoading && !user) {
-      router.push('/login');
-    }
-  }, [user, isUserLoading, router]);
-
   const stopScan = useCallback(() => {
     if (scanAnimationRef.current) {
       cancelAnimationFrame(scanAnimationRef.current);
@@ -42,13 +36,17 @@ export default function QrHub() {
     }
     setIsScanning(false);
   }, []);
-
+  
   useEffect(() => {
+    if (!isUserLoading && !user) {
+      router.push('/login');
+    }
+    
     // Cleanup function to stop scanning when the component unmounts or user navigates away
     return () => {
       stopScan();
     };
-  }, [stopScan]);
+  }, [user, isUserLoading, router, stopScan]);
 
   const tick = useCallback(() => {
     if (videoRef.current?.readyState === videoRef.current?.HAVE_ENOUGH_DATA && canvasRef.current) {
@@ -76,22 +74,17 @@ export default function QrHub() {
             if (url.origin === window.location.origin) {
                 router.push(url.pathname + url.search);
             } else {
-                // Potentially malicious URL, handle with care
-                // For now, let's just show an error.
                 toast.error('QR Code leads to an external website, which is not allowed.');
                 setIsProcessingQr(false);
             }
           } catch (e) {
              toast.error('Invalid QR code data.');
              setIsProcessingQr(false);
-             // Optionally restart scan or wait for user action
-             // startScan(); 
           }
           return; // Stop the loop
         }
       }
     }
-    // Only continue scanning if the ref is still set and we aren't processing a found QR
     if (scanAnimationRef.current !== undefined && !isProcessingQr) {
       scanAnimationRef.current = requestAnimationFrame(tick);
     }
@@ -114,7 +107,6 @@ export default function QrHub() {
       setHasCameraPermission(true);
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
-        // Start the animation loop
         scanAnimationRef.current = requestAnimationFrame(tick);
       }
     } catch (error) {
