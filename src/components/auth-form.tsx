@@ -72,7 +72,7 @@ export default function AuthForm({ mode }: AuthFormProps) {
       } else {
         await signInWithEmailAndPassword(auth, email, password);
       }
-      router.push('/dashboard');
+      router.push('/qr-hub');
     } catch (err: any) {
       setError(err.message);
     } finally {

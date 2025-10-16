@@ -12,7 +12,9 @@ export default function Header() {
   const router = useRouter();
 
   const handleLogout = async () => {
-    await auth.signOut();
+    if (auth) {
+      await auth.signOut();
+    }
     router.push('/');
   };
 
@@ -26,8 +28,11 @@ export default function Header() {
         {!isUserLoading &&
           (user ? (
             <>
-              <Link href="/dashboard">
-                <Button variant="ghost">Dashboard</Button>
+              <Link href="/qr-hub">
+                <Button variant="ghost">QR Hub</Button>
+              </Link>
+              <Link href="/documents">
+                <Button variant="ghost">Documents</Button>
               </Link>
               <Button variant="ghost" onClick={handleLogout}>
                 <LogOut className="mr-2 h-4 w-4" />
