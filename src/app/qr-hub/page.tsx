@@ -21,6 +21,7 @@ export default function QrHub() {
   const scanAnimationRef = useRef<number>();
   const [hasCameraPermission, setHasCameraPermission] = useState<boolean | null>(null);
   const [isScanning, setIsScanning] = useState(false);
+  const [isProcessingQr, setIsProcessingQr] = useState(false);
 
 
   useEffect(() => {
@@ -65,35 +66,47 @@ export default function QrHub() {
         });
 
         if (code && code.data) {
+          setIsProcessingQr(true);
           stopScan();
           toast.success('QR Code detected! Redirecting...');
-          // Ensure the URL is valid before redirecting
+          
           try {
+            // Validate and navigate
             const url = new URL(code.data);
-            router.push(url.href);
+            if (url.origin === window.location.origin) {
+                router.push(url.pathname + url.search);
+            } else {
+                // Potentially malicious URL, handle with care
+                // For now, let's just show an error.
+                toast.error('QR Code leads to an external website, which is not allowed.');
+                setIsProcessingQr(false);
+            }
           } catch (e) {
              toast.error('Invalid QR code data.');
-             startScan(); // a bad qr code shouldn't stop the scanning
+             setIsProcessingQr(false);
+             // Optionally restart scan or wait for user action
+             // startScan(); 
           }
           return; // Stop the loop
         }
       }
     }
-    // Only continue scanning if the ref is still set
-    if (scanAnimationRef.current !== undefined) {
+    // Only continue scanning if the ref is still set and we aren't processing a found QR
+    if (scanAnimationRef.current !== undefined && !isProcessingQr) {
       scanAnimationRef.current = requestAnimationFrame(tick);
     }
-  }, [router, stopScan]);
+  }, [router, stopScan, isProcessingQr]);
 
 
   const startScan = async () => {
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      toast.error('Camera not supported in this browser.');
+    if (isScanning || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      toast.error('Camera not supported or already active.');
       setHasCameraPermission(false);
       return;
     }
     
     setIsScanning(true);
+    setIsProcessingQr(false);
     setHasCameraPermission(null); 
 
     try {
@@ -101,16 +114,17 @@ export default function QrHub() {
       setHasCameraPermission(true);
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
+        // Start the animation loop
         scanAnimationRef.current = requestAnimationFrame(tick);
       }
     } catch (error) {
       console.error('Error accessing camera:', error);
       setHasCameraPermission(false);
       setIsScanning(false);
-      if ((error as Error).name === 'NotAllowedError') {
+      if ((error as Error).name === 'NotAllowedError' || (error as Error).name === 'PermissionDeniedError') {
          toast.error('Camera access denied. Please enable it in your browser settings.');
       } else {
-         toast.error('Could not access camera. Please try again.');
+         toast.error('Could not access camera. It might be in use by another application.');
       }
     }
   };
@@ -163,16 +177,17 @@ export default function QrHub() {
                           </Alert>
                        </div>
                     )}
-                     {hasCameraPermission === true && (
+                     {hasCameraPermission === true && !isProcessingQr && (
                       <div className="absolute inset-0 border-4 border-primary/50 rounded-md animate-pulse"></div>
                      )}
-                     {hasCameraPermission === null && (
-                        <div className="absolute inset-0 flex items-center justify-center bg-background/80">
+                     {(hasCameraPermission === null || isProcessingQr) && (
+                        <div className="absolute inset-0 flex flex-col items-center justify-center bg-background/80">
                             <Loader2 className="h-16 w-16 animate-spin text-primary" />
+                            {isProcessingQr && <p className="mt-4 text-sm text-primary-foreground">Processing QR Code...</p>}
                         </div>
                      )}
                   </div>
-                  <Button onClick={stopScan} variant="outline">Cancel Scan</Button>
+                  <Button onClick={stopScan} variant="outline" disabled={isProcessingQr}>Cancel Scan</Button>
                 </>
               ) : (
                 <div className="text-center p-4">
@@ -237,3 +252,5 @@ export default function QrHub() {
     </div>
   );
 }
+
+    
