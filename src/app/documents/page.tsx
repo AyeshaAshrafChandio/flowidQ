@@ -8,7 +8,7 @@ import { useEffect, useState, useRef } from 'react';
 import Header from '@/components/header';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Upload, FileText, Trash2, Loader2, QrCode, X, FileEdit, Save } from 'lucide-react';
+import { Upload, FileText, Trash2, Loader2, QrCode, X, FileEdit, Save, ShieldCheck } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from "@/components/ui/checkbox";
 import { collection, query, orderBy, serverTimestamp, deleteDoc, doc, addDoc, updateDoc } from 'firebase/firestore';
@@ -145,7 +145,6 @@ export default function DocumentsPage() {
               
               toast.dismiss(); // Dismiss the "analyzing" toast
               toast.success(`AI detected: ${analysisResult.documentType}`);
-              console.log('AI Analysis:', analysisResult);
 
             } catch (aiError) {
               console.error("AI analysis failed:", aiError);
@@ -223,11 +222,15 @@ export default function DocumentsPage() {
           operation: 'update',
           requestResourceData: updateData
       }));
-      toast.error('Failed to rename document.');
+      throw error;
+    }).then(() => {
+        toast.success('Document renamed successfully.');
+        handleCancelEdit();
+    }).catch(error => {
+        if (!String(error).includes('permission-error')) {
+            toast.error('Failed to rename document.');
+        }
     });
-    
-    toast.success('Document rename initiated.');
-    handleCancelEdit();
   };
 
   const handleGenerateQrCode = async () => {
@@ -334,103 +337,123 @@ export default function DocumentsPage() {
           </div>
         )}
 
-        <Card className="glowing-border">
-          <CardHeader>
-            <CardTitle>Your Documents</CardTitle>
-            <CardDescription>
-              Select, edit, and manage your documents. Generate a QR code to share.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {isLoadingDocuments && 
-                <div className="flex justify-center py-12">
-                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                </div>
-              }
-              {!isLoadingDocuments && documents && documents.length > 0 ? (
-                documents.map((doc) => (
-                  <div key={doc.id} className="flex items-center justify-between p-3 rounded-lg bg-secondary/50 hover:bg-secondary/70 transition-colors">
-                    <div className="flex items-center gap-4 flex-grow">
-                      <Checkbox
-                        id={`select-${doc.id}`}
-                        checked={selectedDocs.includes(doc.id)}
-                        onCheckedChange={() => handleDocSelection(doc.id)}
-                        aria-label={`Select document ${doc.name}`}
-                        disabled={!!editingDocId}
-                      />
-                      <FileText className="h-6 w-6 text-primary" />
-                      {editingDocId === doc.id ? (
-                        <div className="flex-grow flex items-center gap-2">
-                           <Input 
-                             value={editingDocName}
-                             onChange={(e) => setEditingDocName(e.target.value)}
-                             className="h-8"
-                             autoFocus
-                           />
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <Card className="glowing-border md:col-span-1">
+                <CardHeader>
+                    <CardTitle>Your Documents</CardTitle>
+                    <CardDescription>
+                    Select, edit, and manage your documents. Generate a QR code to share.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <div className="space-y-4">
+                    {isLoadingDocuments && 
+                        <div className="flex justify-center py-12">
+                        <Loader2 className="h-8 w-8 animate-spin text-primary" />
                         </div>
-                      ) : (
-                        <div>
-                          <label htmlFor={`select-${doc.id}`} className="font-medium cursor-pointer">{doc.name}</label>
-                          <p className="text-sm text-muted-foreground">
-                            Uploaded on {doc.uploadDate ? new Date(doc.uploadDate.seconds * 1000).toLocaleDateString() : 'Just now'}
-                          </p>
+                    }
+                    {!isLoadingDocuments && documents && documents.length > 0 ? (
+                        documents.map((doc) => (
+                        <div key={doc.id} className="flex items-center justify-between p-3 rounded-lg bg-secondary/50 hover:bg-secondary/70 transition-colors">
+                            <div className="flex items-center gap-4 flex-grow">
+                            <Checkbox
+                                id={`select-${doc.id}`}
+                                checked={selectedDocs.includes(doc.id)}
+                                onCheckedChange={() => handleDocSelection(doc.id)}
+                                aria-label={`Select document ${doc.name}`}
+                                disabled={!!editingDocId}
+                            />
+                            <FileText className="h-6 w-6 text-primary" />
+                            {editingDocId === doc.id ? (
+                                <div className="flex-grow flex items-center gap-2">
+                                <Input 
+                                    value={editingDocName}
+                                    onChange={(e) => setEditingDocName(e.target.value)}
+                                    className="h-8"
+                                    autoFocus
+                                />
+                                </div>
+                            ) : (
+                                <div>
+                                <label htmlFor={`select-${doc.id}`} className="font-medium cursor-pointer">{doc.name}</label>
+                                <p className="text-sm text-muted-foreground">
+                                    Uploaded on {doc.uploadDate ? new Date(doc.uploadDate.seconds * 1000).toLocaleDateString() : 'Just now'}
+                                </p>
+                                </div>
+                            )}
+                            </div>
+                            <div className="flex items-center gap-1">
+                            {editingDocId === doc.id ? (
+                                <>
+                                <Button variant="ghost" size="icon" onClick={() => handleUpdateName(doc.id)}>
+                                    <Save className="h-4 w-4 text-green-500" />
+                                </Button>
+                                <Button variant="ghost" size="icon" onClick={handleCancelEdit}>
+                                    <X className="h-4 w-4 text-red-500" />
+                                </Button>
+                                </>
+                            ) : (
+                                <>
+                                <Button variant="ghost" size="icon" onClick={() => handleEdit(doc)}>
+                                    <FileEdit className="h-4 w-4" />
+                                </Button>
+                                <AlertDialog>
+                                    <AlertDialogTrigger asChild>
+                                    <Button variant="ghost" size="icon">
+                                        <Trash2 className="h-4 w-4 text-red-500 hover:text-red-400" />
+                                    </Button>
+                                    </AlertDialogTrigger>
+                                    <AlertDialogContent>
+                                    <AlertDialogHeader>
+                                        <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                                        <AlertDialogDescription>
+                                        This action cannot be undone. This will permanently delete your
+                                        document and remove your data from our servers.
+                                        </AlertDialogDescription>
+                                    </AlertDialogHeader>
+                                    <AlertDialogFooter>
+                                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                        <AlertDialogAction onClick={() => handleDelete(doc.id, doc.storagePath)}>Continue</AlertDialogAction>
+                                    </AlertDialogFooter>
+                                    </AlertDialogContent>
+                                </AlertDialog>
+                                </>
+                            )}
+                            </div>
                         </div>
-                      )}
+                        ))
+                    ) : (
+                        !isLoadingDocuments && (
+                        <div className="text-center py-12">
+                            <FileText className="mx-auto h-12 w-12 text-muted-foreground" />
+                            <h3 className="mt-4 text-lg font-semibold">No Documents Found</h3>
+                            <p className="mt-2 text-sm text-muted-foreground">Click "Upload" to add your first document.</p>
+                        </div>
+                        )
+                    )}
                     </div>
-                    <div className="flex items-center gap-1">
-                      {editingDocId === doc.id ? (
-                        <>
-                          <Button variant="ghost" size="icon" onClick={() => handleUpdateName(doc.id)}>
-                            <Save className="h-4 w-4 text-green-500" />
-                          </Button>
-                          <Button variant="ghost" size="icon" onClick={handleCancelEdit}>
-                            <X className="h-4 w-4 text-red-500" />
-                          </Button>
-                        </>
-                      ) : (
-                        <>
-                          <Button variant="ghost" size="icon" onClick={() => handleEdit(doc)}>
-                            <FileEdit className="h-4 w-4" />
-                          </Button>
-                          <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                              <Button variant="ghost" size="icon">
-                                <Trash2 className="h-4 w-4 text-red-500 hover:text-red-400" />
-                              </Button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent>
-                              <AlertDialogHeader>
-                                <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-                                <AlertDialogDescription>
-                                  This action cannot be undone. This will permanently delete your
-                                  document and remove your data from our servers.
-                                </AlertDialogDescription>
-                              </AlertDialogHeader>
-                              <AlertDialogFooter>
-                                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                <AlertDialogAction onClick={() => handleDelete(doc.id, doc.storagePath)}>Continue</AlertDialogAction>
-                              </AlertDialogFooter>
-                            </AlertDialogContent>
-                          </AlertDialog>
-                        </>
-                      )}
+                </CardContent>
+            </Card>
+
+            <Card className="glowing-border md:col-span-1">
+                <CardHeader>
+                    <CardTitle>Access History</CardTitle>
+                    <CardDescription>
+                    Track who has accessed your shared documents.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <div className="text-center py-12">
+                        <ShieldCheck className="mx-auto h-12 w-12 text-muted-foreground" />
+                        <h3 className="mt-4 text-lg font-semibold">No Access History</h3>
+                        <p className="mt-2 text-sm text-muted-foreground">This feature is coming soon. You'll be able to see who accessed your files here.</p>
                     </div>
-                  </div>
-                ))
-              ) : (
-                !isLoadingDocuments && (
-                  <div className="text-center py-12">
-                    <FileText className="mx-auto h-12 w-12 text-muted-foreground" />
-                    <h3 className="mt-4 text-lg font-semibold">No Documents Found</h3>
-                    <p className="mt-2 text-sm text-muted-foreground">Click "Upload" to add your first document.</p>
-                  </div>
-                )
-              )}
-            </div>
-          </CardContent>
-        </Card>
+                </CardContent>
+            </Card>
+        </div>
       </main>
     </div>
   );
 }
+
+    

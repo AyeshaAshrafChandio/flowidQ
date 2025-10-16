@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useMemo } from 'react';
 import Header from '@/components/header';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, Ticket, Users, Hash, UserCircle } from 'lucide-react';
+import { Loader2, Ticket, Users, Hash } from 'lucide-react';
 import { collection, query, where, collectionGroup } from 'firebase/firestore';
 
 export default function MyTicketsPage() {
@@ -14,7 +14,6 @@ export default function MyTicketsPage() {
   const router = useRouter();
   const firestore = useFirestore();
 
-  // 1. Get all queue entries for the current user that are 'waiting'
   const userQueueEntriesQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
     return query(
@@ -25,14 +24,12 @@ export default function MyTicketsPage() {
   }, [firestore, user]);
   const { data: queueEntries, isLoading: isLoadingEntries } = useCollection(userQueueEntriesQuery);
   
-  // 2. Get all queues
   const allQueuesQuery = useMemoFirebase(() => {
     if(!firestore) return null;
     return query(collection(firestore, 'queues'));
   }, [firestore]);
   const { data: allQueues, isLoading: isLoadingQueues } = useCollection(allQueuesQuery);
   
-  // 3. Enrich the user's queue entries with details from the allQueues query
   const enrichedEntries = useMemo(() => {
     if (!queueEntries || !allQueues) return [];
     
@@ -45,7 +42,7 @@ export default function MyTicketsPage() {
         queueName: queueDetails?.name || 'Loading...',
         currentNumber: queueDetails?.currentNumber || 0,
       };
-    }).filter(entry => entry.queueName !== 'Loading...'); // Filter out entries where queue details are not yet loaded
+    }).filter(entry => entry.queueName !== 'Loading...');
   }, [queueEntries, allQueues]);
 
 

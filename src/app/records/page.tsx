@@ -1,0 +1,143 @@
+
+'use client';
+
+import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
+import { useRouter } from 'next/navigation';
+import { useEffect, useMemo } from 'react';
+import Header from '@/components/header';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Loader2, Ticket, Users, Hash, History, QrCode } from 'lucide-react';
+import { collection, query, where, collectionGroup, orderBy } from 'firebase/firestore';
+
+export default function RecordsPage() {
+  const { user, isUserLoading } = useUser();
+  const router = useRouter();
+  const firestore = useFirestore();
+
+  // 1. Get all queue entries for the current user
+  const userQueueEntriesQuery = useMemoFirebase(() => {
+    if (!firestore || !user) return null;
+    return query(
+      collectionGroup(firestore, 'queueEntries'),
+      where('userId', '==', user.uid),
+      orderBy('entryTime', 'desc')
+    );
+  }, [firestore, user]);
+  const { data: queueEntries, isLoading: isLoadingEntries } = useCollection(userQueueEntriesQuery);
+  
+  // 2. Get all queues to enrich the data
+  const allQueuesQuery = useMemoFirebase(() => {
+    if(!firestore) return null;
+    return query(collection(firestore, 'queues'));
+  }, [firestore]);
+  const { data: allQueues, isLoading: isLoadingQueues } = useCollection(allQueuesQuery);
+  
+  // 3. Enrich the user's queue entries with details from the allQueues query
+  const enrichedEntries = useMemo(() => {
+    if (!queueEntries || !allQueues) return [];
+    
+    const queuesMap = new Map(allQueues.map(q => [q.id, q]));
+
+    return queueEntries.map(entry => {
+      const queueDetails = queuesMap.get(entry.queueId);
+      return {
+        ...entry,
+        queueName: queueDetails?.name || 'Unknown Queue',
+        locationName: queueDetails?.locationName || '',
+      };
+    });
+  }, [queueEntries, allQueues]);
+
+
+  useEffect(() => {
+    if (!isUserLoading && !user) {
+      router.push('/login');
+    }
+  }, [user, isUserLoading, router]);
+
+  if (isUserLoading || !user) {
+    return (
+      <div className="flex flex-col min-h-screen">
+        <Header />
+        <main className="flex-grow container mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-center">
+          <Loader2 className="h-16 w-16 animate-spin text-primary" />
+        </main>
+      </div>
+    );
+  }
+
+  const isLoading = isLoadingEntries || isLoadingQueues;
+
+  return (
+    <div className="flex flex-col min-h-screen">
+      <Header />
+      <main className="flex-grow container mx-auto px-4 sm:px-6 lg:px-8 py-12">
+        <h1 className="text-3xl font-bold mb-8">My Records</h1>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            {/* Queue History */}
+            <Card className="glowing-border">
+                <CardHeader>
+                    <CardTitle className="flex items-center"><History className="mr-2 h-6 w-6"/>Queue History</CardTitle>
+                    <CardDescription>A record of all queues you have joined.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    {isLoading && (
+                        <div className="flex justify-center py-12">
+                            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                        </div>
+                    )}
+                    {!isLoading && enrichedEntries && enrichedEntries.length > 0 ? (
+                        <div className="space-y-4 max-h-96 overflow-y-auto pr-2">
+                           {enrichedEntries.map(entry => (
+                             <div key={entry.id} className="p-4 rounded-lg bg-secondary/50">
+                                <div className="flex justify-between items-start">
+                                    <div>
+                                        <p className="font-semibold">{entry.queueName}</p>
+                                        <p className="text-sm text-muted-foreground">{entry.locationName}</p>
+                                    </div>
+                                    <span className={`capitalize text-xs font-semibold px-2 py-1 rounded-full ${
+                                        entry.status === 'waiting' ? 'bg-yellow-500/20 text-yellow-400' :
+                                        entry.status === 'served' ? 'bg-green-500/20 text-green-400' :
+                                        entry.status === 'cancelled' ? 'bg-red-500/20 text-red-400' :
+                                        'bg-gray-500/20 text-gray-400'
+                                    }`}>
+                                        {entry.status}
+                                    </span>
+                                </div>
+                                <div className="flex justify-between items-end mt-2">
+                                    <p className="text-sm text-muted-foreground">Your Ticket: <span className="font-bold text-primary">#{entry.ticketNumber}</span></p>
+                                    <p className="text-xs text-muted-foreground">
+                                        {new Date(entry.entryTime.seconds * 1000).toLocaleString()}
+                                    </p>
+                                </div>
+                             </div>
+                           ))}
+                        </div>
+                    ) : (
+                        !isLoading && <p className="text-muted-foreground text-center py-8">You have not joined any queues yet.</p>
+                    )}
+                </CardContent>
+            </Card>
+            
+            {/* Shared QR History */}
+            <Card className="glowing-border">
+                <CardHeader>
+                    <CardTitle className="flex items-center"><QrCode className="mr-2 h-6 w-6"/>Shared Document History</CardTitle>
+                    <CardDescription>A record of all QR codes you have generated to share documents.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <div className="text-center py-12">
+                        <QrCode className="mx-auto h-12 w-12 text-muted-foreground" />
+                        <h3 className="mt-4 text-lg font-semibold">No Shared History</h3>
+                        <p className="mt-2 text-sm text-muted-foreground">This feature is coming soon. You'll be able to see a history of your shared QR codes here.</p>
+                    </div>
+                </CardContent>
+            </Card>
+        </div>
+      </main>
+    </div>
+  );
+}
+
+    
