@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from 'react';
 import Header from '@/components/header';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { ScanLine, Upload, FileCog, VideoOff } from 'lucide-react';
+import { ScanLine, Upload, FileCog, VideoOff, QrCode } from 'lucide-react';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -33,7 +33,7 @@ export default function QrHub() {
         stream.getTracks().forEach(track => track.stop());
       }
     };
-  }, [isScanning]);
+  }, []); // Run cleanup on unmount
 
 
   const startScan = async () => {
@@ -65,6 +65,7 @@ export default function QrHub() {
     if (videoRef.current && videoRef.current.srcObject) {
       const stream = videoRef.current.srcObject as MediaStream;
       stream.getTracks().forEach(track => track.stop());
+      videoRef.current.srcObject = null;
     }
     setIsScanning(false);
   };
@@ -113,7 +114,7 @@ export default function QrHub() {
                             <AlertTitle>Camera Access Required</AlertTitle>
                             <AlertDescription>
                               Please allow camera access in your browser settings to use this feature.
-                            </AlertDescription>
+                            </Aler tDescription>
                           </Alert>
                        </div>
                     )}
@@ -163,7 +164,7 @@ export default function QrHub() {
             <Card className="glowing-border">
               <CardHeader>
                   <div className="flex items-center gap-4">
-                      <Upload className="h-8 w-8 text-primary" />
+                      <QrCode className="h-8 w-8 text-primary" />
                       <div>
                           <CardTitle>Generate QR Code</CardTitle>
                           <CardDescription>Share your documents securely.</CardDescription>
@@ -172,11 +173,13 @@ export default function QrHub() {
               </CardHeader>
               <CardContent>
                   <p className="text-muted-foreground text-sm mb-4">
-                      Select documents to generate a new secure QR code for sharing.
+                      Select documents from your wallet to generate a new secure QR code for sharing.
                   </p>
-                  <Button className="w-full" disabled>
-                      Generate New QR Code
-                  </Button>
+                  <Link href="/documents" passHref>
+                    <Button className="w-full">
+                        Generate New QR Code
+                    </Button>
+                  </Link>
               </CardContent>
             </Card>
           </div>

@@ -1,17 +1,19 @@
 'use client';
 
 import { useUser, useFirestore, useCollection, useMemoFirebase, addDocumentNonBlocking } from '@/firebase';
-import { getStorage, ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
+import { getStorage, ref, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebase/storage';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState, useRef } from 'react';
 import Header from '@/components/header';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Upload, FileText, Trash2, Loader2 } from 'lucide-react';
+import { Upload, FileText, Trash2, Loader2, QrCode, X } from 'lucide-react';
 import { Input } from '@/components/ui/input';
-import { Progress } from '@/components/ui/progress';
-import { collection, query, orderBy, serverTimestamp } from 'firebase/firestore';
+import { Checkbox } from "@/components/ui/checkbox"
+import { collection, query, orderBy, serverTimestamp, deleteDoc, doc, addDoc } from 'firebase/firestore';
 import toast from 'react-hot-toast';
+import QRCode from 'qrcode.react';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogClose } from '@/components/ui/dialog';
 
 export default function DocumentsPage() {
   const { user, isUserLoading } = useUser();
@@ -23,13 +25,14 @@ export default function DocumentsPage() {
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [selectedDocs, setSelectedDocs] = useState<string[]>([]);
+  const [generatedQrValue, setGeneratedQrValue] = useState<string | null>(null);
 
-  // Real-time listener for user's documents
   const documentsQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
     return query(collection(firestore, 'users', user.uid, 'documents'), orderBy('uploadDate', 'desc'));
   }, [firestore, user]);
-  
+
   const { data: documents, isLoading: isLoadingDocuments } = useCollection(documentsQuery);
 
   useEffect(() => {
@@ -45,18 +48,17 @@ export default function DocumentsPage() {
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
-      // Basic validation
       if (file.size > 10 * 1024 * 1024) { // 10MB limit
         toast.error('File is too large. Maximum size is 10MB.');
         return;
       }
       setSelectedFile(file);
-      handleUpload(file); // Automatically start upload on file selection
+      handleUpload(file);
     }
   };
 
   const handleUpload = async (file: File) => {
-    if (!user) {
+    if (!user || !firestore) {
       toast.error('You must be logged in to upload documents.');
       return;
     }
@@ -81,14 +83,14 @@ export default function DocumentsPage() {
       },
       () => {
         getDownloadURL(uploadTask.snapshot.ref).then((downloadURL) => {
-          if (!firestore) return;
           const documentsColRef = collection(firestore, 'users', user.uid, 'documents');
           addDocumentNonBlocking(documentsColRef, {
             name: file.name,
             fileUrl: downloadURL,
+            storagePath: storageRef.fullPath, // Save storage path for deletion
             uploadDate: serverTimestamp(),
             category: file.type,
-            isEncrypted: true, // Assuming encryption is handled by Storage rules/features
+            isEncrypted: true,
             userId: user.uid,
           });
 
@@ -101,13 +103,60 @@ export default function DocumentsPage() {
     );
   };
 
+  const handleDelete = async (docId: string, storagePath: string) => {
+    if (!user || !firestore) return;
+    if (!confirm('Are you sure you want to delete this document?')) return;
+    
+    const docRef = doc(firestore, 'users', user.uid, 'documents', docId);
+    const storageRef = ref(storage, storagePath);
 
+    try {
+      await deleteDoc(docRef);
+      await deleteObject(storageRef);
+      toast.success('Document deleted successfully.');
+      setSelectedDocs(prev => prev.filter(id => id !== docId));
+    } catch (error) {
+      console.error('Error deleting document:', error);
+      toast.error('Failed to delete document.');
+    }
+  };
+
+  const handleGenerateQrCode = async () => {
+    if (selectedDocs.length === 0 || !user || !firestore) {
+      toast.error('Please select at least one document to generate a QR code.');
+      return;
+    }
+
+    try {
+      const qrCodesColRef = collection(firestore, 'qrCodes');
+      const newQrCodeRef = await addDoc(qrCodesColRef, {
+        userId: user.uid,
+        documentIds: selectedDocs,
+        generatedDate: serverTimestamp(),
+        expirationDate: null, // Or set an expiration date
+        accessCount: 0,
+      });
+
+      const qrValue = `${window.location.origin}/verify/${newQrCodeRef.id}`;
+      setGeneratedQrValue(qrValue);
+    } catch (error) {
+      console.error("Error generating QR code:", error);
+      toast.error('Failed to generate QR code.');
+    }
+  };
+
+  const handleDocSelection = (docId: string) => {
+    setSelectedDocs(prev => 
+      prev.includes(docId) ? prev.filter(id => id !== docId) : [...prev, docId]
+    );
+  };
+  
   if (isUserLoading || !user) {
     return (
       <div className="flex flex-col min-h-screen">
         <Header />
         <main className="flex-grow container mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-center">
-          <p>Loading...</p>
+          <Loader2 className="h-16 w-16 animate-spin text-primary" />
         </main>
       </div>
     );
@@ -117,16 +166,46 @@ export default function DocumentsPage() {
     <div className="flex flex-col min-h-screen">
       <Header />
       <main className="flex-grow container mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        <div className="flex justify-between items-center mb-8">
+        <div className="flex justify-between items-center mb-8 gap-4">
           <h1 className="text-3xl font-bold">Document Wallet</h1>
-          <Button onClick={handleFileSelect} disabled={isUploading}>
-            {isUploading ? (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            ) : (
-              <Upload className="mr-2 h-4 w-4" />
-            )}
-            Upload Document
-          </Button>
+          <div className="flex gap-2">
+             <Dialog onOpenChange={() => setGeneratedQrValue(null)}>
+              <DialogTrigger asChild>
+                <Button onClick={handleGenerateQrCode} disabled={selectedDocs.length === 0}>
+                  <QrCode className="mr-2 h-4 w-4" />
+                  Generate QR Code
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-[425px]">
+                <DialogHeader>
+                  <DialogTitle>Share Documents</DialogTitle>
+                  <DialogDescription>
+                    Scan this QR code to securely access the selected documents.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="flex items-center justify-center p-4">
+                  {generatedQrValue ? (
+                    <QRCode value={generatedQrValue} size={256} />
+                  ) : (
+                    <Loader2 className="h-16 w-16 animate-spin text-primary" />
+                  )}
+                </div>
+                 <DialogClose asChild>
+                    <Button type="button" variant="secondary" className="w-full">
+                      Done
+                    </Button>
+                  </DialogClose>
+              </DialogContent>
+            </Dialog>
+            <Button onClick={handleFileSelect} disabled={isUploading}>
+              {isUploading ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Upload className="mr-2 h-4 w-4" />
+              )}
+              Upload
+            </Button>
+          </div>
           <Input 
             type="file" 
             ref={fileInputRef} 
@@ -137,9 +216,14 @@ export default function DocumentsPage() {
         </div>
 
         {isUploading && selectedFile && (
-          <div className="mb-8 p-4 rounded-lg bg-secondary/50">
+          <div className="mb-8 p-4 rounded-lg border">
             <p className="font-medium mb-2">Uploading: {selectedFile.name}</p>
-            <Progress value={uploadProgress} className="w-full" />
+            <div className="relative h-2 w-full overflow-hidden rounded-full bg-secondary">
+              <div
+                className="h-full w-full flex-1 bg-primary transition-all"
+                style={{ transform: `translateX(-${100 - (uploadProgress || 0)}%)` }}
+              />
+            </div>
           </div>
         )}
 
@@ -147,33 +231,45 @@ export default function DocumentsPage() {
           <CardHeader>
             <CardTitle>Your Documents</CardTitle>
             <CardDescription>
-              Here are all the documents you've securely uploaded.
+              Select documents to generate a sharing QR code or upload new ones.
             </CardDescription>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {isLoadingDocuments && <p>Loading documents...</p>}
+              {isLoadingDocuments && 
+                <div className="flex justify-center py-12">
+                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                </div>
+              }
               {!isLoadingDocuments && documents && documents.length > 0 ? (
                 documents.map((doc) => (
-                  <div key={doc.id} className="flex items-center justify-between p-4 rounded-lg bg-secondary/50">
+                  <div key={doc.id} className="flex items-center justify-between p-3 rounded-lg bg-secondary/50 hover:bg-secondary/70 transition-colors">
                     <div className="flex items-center gap-4">
+                      <Checkbox
+                        id={`select-${doc.id}`}
+                        checked={selectedDocs.includes(doc.id)}
+                        onCheckedChange={() => handleDocSelection(doc.id)}
+                        aria-label={`Select document ${doc.name}`}
+                      />
                       <FileText className="h-6 w-6 text-primary" />
                       <div>
-                        <p className="font-medium">{doc.name}</p>
+                        <label htmlFor={`select-${doc.id}`} className="font-medium cursor-pointer">{doc.name}</label>
                         <p className="text-sm text-muted-foreground">
                           Uploaded on {doc.uploadDate ? new Date(doc.uploadDate.seconds * 1000).toLocaleDateString() : 'Just now'}
                         </p>
                       </div>
                     </div>
-                    <Button variant="ghost" size="icon">
-                      <Trash2 className="h-4 w-4 text-red-500" />
+                    <Button variant="ghost" size="icon" onClick={() => handleDelete(doc.id, doc.storagePath)}>
+                      <Trash2 className="h-4 w-4 text-red-500 hover:text-red-400" />
                     </Button>
                   </div>
                 ))
               ) : (
                 !isLoadingDocuments && (
                   <div className="text-center py-12">
-                    <p className="text-muted-foreground">You haven't uploaded any documents yet.</p>
+                    <FileText className="mx-auto h-12 w-12 text-muted-foreground" />
+                    <h3 className="mt-4 text-lg font-semibold">No Documents Found</h3>
+                    <p className="mt-2 text-sm text-muted-foreground">Click "Upload" to add your first document.</p>
                   </div>
                 )
               )}
@@ -184,22 +280,3 @@ export default function DocumentsPage() {
     </div>
   );
 }
-
-// Dummy progress component for UI consistency
-const Progress = React.forwardRef<
-  HTMLDivElement,
-  React.HTMLAttributes<HTMLDivElement> & { value?: number | null }
->(({ className, value, ...props }, ref) => (
-  <div
-    ref={ref}
-    className="relative h-2 w-full overflow-hidden rounded-full bg-secondary"
-    {...props}
-  >
-    <div
-      className="h-full w-full flex-1 bg-primary transition-all"
-      style={{ transform: `translateX(-${100 - (value || 0)}%)` }}
-    />
-  </div>
-));
-Progress.displayName = "Progress";
-import * as React from 'react';
