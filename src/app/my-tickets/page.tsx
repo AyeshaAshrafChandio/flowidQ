@@ -42,7 +42,7 @@ export default function MyTicketsPage() {
         queueName: queueDetails?.name || 'Loading...',
         currentNumber: queueDetails?.currentNumber || 0,
       };
-    });
+    }).filter(entry => entry.queueName !== 'Loading...');
   }, [queueEntries, allQueues]);
 
 

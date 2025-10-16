@@ -1,6 +1,7 @@
 import type {NextConfig} from 'next';
 
 const nextConfig: NextConfig = {
+  serverActions: true,
   images: {
     remotePatterns: [
       {
@@ -9,7 +10,6 @@ const nextConfig: NextConfig = {
       },
     ],
   },
-  serverActions: true,
   typescript: {
     ignoreBuildErrors: true,
   },

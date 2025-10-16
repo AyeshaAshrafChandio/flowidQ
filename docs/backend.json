@@ -167,6 +167,7 @@
       "required": [
         "id",
         "name",
+        "description",
         "locationName",
         "currentNumber",
         "averageWaitTime",
@@ -285,10 +286,6 @@
     "/users/{userId}/documents/{documentId}": {
       "schema": { "$ref": "#/entities/Document" },
       "description": "Stores documents owned by a specific user."
-    },
-    "/users/{userId}/documents/{documentId}/accessLogs/{accessLogId}": {
-      "schema": { "$ref": "#/entities/AccessLog" },
-      "description": "Stores access logs for a specific document."
     },
     "/queues/{queueId}": {
       "schema": { "$ref": "#/entities/Queue" },
