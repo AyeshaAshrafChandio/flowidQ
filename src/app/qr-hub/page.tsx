@@ -41,6 +41,7 @@ export default function QrHub() {
   }, []);
 
   useEffect(() => {
+    // Cleanup function to stop scanning when the component unmounts
     return () => {
       stopScan();
     };
@@ -81,13 +82,14 @@ export default function QrHub() {
     }
     
     setIsScanning(true);
-    setHasCameraPermission(null);
+    setHasCameraPermission(null); // Reset permission state on new scan attempt
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
       setHasCameraPermission(true);
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
+        // Start the scanning loop
         scanAnimationRef.current = requestAnimationFrame(tick);
       }
     } catch (error) {
@@ -142,7 +144,7 @@ export default function QrHub() {
                             <AlertTitle>Camera Access Required</AlertTitle>
                             <AlertDescription>
                               Please allow camera access in your browser settings to use this feature.
-                            </AlertDescription>
+                            </Aler tDescription>
                           </Alert>
                        </div>
                     )}
