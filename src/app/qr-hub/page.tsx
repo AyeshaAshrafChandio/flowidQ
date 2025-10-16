@@ -6,18 +6,56 @@ import { useEffect, useRef, useState } from 'react';
 import Header from '@/components/header';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { ScanLine, Upload, FileCog } from 'lucide-react';
+import { ScanLine, Upload, FileCog, VideoOff } from 'lucide-react';
 import Link from 'next/link';
+import toast from 'react-hot-toast';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 export default function QrHub() {
   const { user, isUserLoading } = useUser();
   const router = useRouter();
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [hasCameraPermission, setHasCameraPermission] = useState<boolean | null>(null);
+
 
   useEffect(() => {
     if (!isUserLoading && !user) {
       router.push('/login');
     }
   }, [user, isUserLoading, router]);
+  
+  useEffect(() => {
+    const getCameraPermission = async () => {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        console.error('Camera API not available in this browser.');
+        setHasCameraPermission(false);
+        toast.error('Camera not supported in this browser.');
+        return;
+      }
+
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+        setHasCameraPermission(true);
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+        }
+      } catch (error) {
+        console.error('Error accessing camera:', error);
+        setHasCameraPermission(false);
+        toast.error('Camera access denied. Please enable it in your browser settings.');
+      }
+    };
+
+    getCameraPermission();
+    
+    // Cleanup function to stop the video stream when the component unmounts
+    return () => {
+      if (videoRef.current && videoRef.current.srcObject) {
+        const stream = videoRef.current.srcObject as MediaStream;
+        stream.getTracks().forEach(track => track.stop());
+      }
+    };
+  }, []);
 
   if (isUserLoading || !user) {
     return (
@@ -51,13 +89,23 @@ export default function QrHub() {
               </div>
             </CardHeader>
             <CardContent>
-              <div className="w-full aspect-video bg-secondary/50 rounded-md flex items-center justify-center mb-4">
-                <p className="text-muted-foreground">Camera view will appear here</p>
+              <div className="w-full aspect-video bg-secondary/50 rounded-md flex items-center justify-center mb-4 relative overflow-hidden">
+                <video ref={videoRef} className="w-full h-full object-cover" autoPlay muted playsInline />
+                {hasCameraPermission === false && (
+                   <div className="absolute inset-0 flex flex-col items-center justify-center bg-background/80 p-4">
+                      <VideoOff className="h-16 w-16 text-muted-foreground mb-4" />
+                      <Alert variant="destructive">
+                        <AlertTitle>Camera Access Required</AlertTitle>
+                        <AlertDescription>
+                          Please allow camera access in your browser settings to use this feature.
+                        </AlertDescription>
+                      </Alert>
+                   </div>
+                )}
+                 {hasCameraPermission === true && (
+                  <div className="absolute inset-0 border-4 border-primary/50 rounded-md animate-pulse"></div>
+                 )}
               </div>
-              <Button className="w-full" disabled>
-                <ScanLine className="mr-2 h-4 w-4" />
-                Enable Camera
-              </Button>
             </CardContent>
           </Card>
 
