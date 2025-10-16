@@ -159,17 +159,20 @@ export default function DocumentsPage() {
     }
 
     try {
-      const qrCodesColRef = collection(firestore, 'qrCodes');
-      const newQrCodeRef = await addDoc(qrCodesColRef, {
+      // This is a simplified example. In a real app, you'd likely create a dedicated collection
+      // for QR codes to manage them, associate them with users, and handle expiration.
+      const qrData = {
         userId: user.uid,
         documentIds: selectedDocs,
-        generatedDate: serverTimestamp(),
-        expirationDate: null, // Or set an expiration date
-        accessCount: 0,
-      });
-
-      const qrValue = `${window.location.origin}/verify/${newQrCodeRef.id}`;
+        timestamp: Date.now(),
+      };
+      
+      // For this example, we'll just stringify the data. 
+      // In a real app, you would create a verification page URL and include a unique ID
+      // that can be used to look up the QR data in Firestore.
+      const qrValue = `${window.location.origin}/verify?data=${btoa(JSON.stringify(qrData))}`;
       setGeneratedQrValue(qrValue);
+
     } catch (error) {
       console.error("Error generating QR code:", error);
       toast.error('Failed to generate QR code.');
@@ -200,7 +203,7 @@ export default function DocumentsPage() {
         <div className="flex justify-between items-center mb-8 gap-4">
           <h1 className="text-3xl font-bold">Document Wallet</h1>
           <div className="flex gap-2">
-             <Dialog onOpenChange={() => setGeneratedQrValue(null)}>
+             <Dialog onOpenChange={(isOpen) => !isOpen && setGeneratedQrValue(null)}>
               <DialogTrigger asChild>
                 <Button onClick={handleGenerateQrCode} disabled={selectedDocs.length === 0}>
                   <QrCode className="mr-2 h-4 w-4" />
