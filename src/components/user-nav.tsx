@@ -1,3 +1,4 @@
+
 'use client';
 
 import {
@@ -14,7 +15,7 @@ import { Button } from '@/components/ui/button';
 import { useAuth, useUser, useFirestore, useDoc, useMemoFirebase } from '@/firebase';
 import { signOut } from 'firebase/auth';
 import { doc } from 'firebase/firestore';
-import { LogOut, User as UserIcon } from 'lucide-react';
+import { LogOut, User as UserIcon, LayoutDashboard } from 'lucide-react';
 import Link from 'next/link';
 
 interface UserProfile {
@@ -45,10 +46,10 @@ export default function UserNav() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" className="relative h-8 w-8 rounded-full">
-          <Avatar className="h-8 w-8">
-            <AvatarImage src="/avatars/01.png" alt="User avatar" />
-            <AvatarFallback>
+        <Button variant="ghost" className="relative h-10 w-10 rounded-full">
+          <Avatar className="h-10 w-10 border-2 border-primary/50">
+            <AvatarImage src={`https://picsum.photos/seed/${user?.uid}/40/40`} alt="User avatar" />
+            <AvatarFallback className="bg-primary/20 font-bold">
               {getInitials(userProfile?.displayName || user?.displayName)}
             </AvatarFallback>
           </Avatar>
@@ -69,7 +70,7 @@ export default function UserNav() {
         <DropdownMenuGroup>
           <Link href="/dashboard">
             <DropdownMenuItem>
-              <UserIcon className="mr-2 h-4 w-4" />
+              <LayoutDashboard className="mr-2 h-4 w-4" />
               <span>Dashboard</span>
             </DropdownMenuItem>
           </Link>

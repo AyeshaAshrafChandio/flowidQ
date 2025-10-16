@@ -1,3 +1,5 @@
+
+'use client';
 import Link from 'next/link';
 import {
   ArrowRight,
@@ -45,7 +47,7 @@ function AuthButtons() {
   const { user, isUserLoading } = useUser();
 
   if (isUserLoading) {
-    return null;
+    return <div className="h-10 w-28 animate-pulse rounded-md bg-muted" />;
   }
 
   if (user) {
@@ -53,7 +55,7 @@ function AuthButtons() {
   }
 
   return (
-    <>
+    <div className="flex items-center gap-2">
       <Button variant="ghost" asChild>
         <Link href="/login">Login</Link>
       </Button>
@@ -62,7 +64,7 @@ function AuthButtons() {
           Get Started <ArrowRight className="ml-2 h-4 w-4" />
         </Link>
       </Button>
-    </>
+    </div>
   );
 }
 

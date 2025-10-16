@@ -1,3 +1,4 @@
+
 'use client';
 
 import * as React from 'react';
@@ -8,8 +9,8 @@ import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
 } from 'firebase/auth';
-import { doc, serverTimestamp, setDoc } from 'firebase/firestore';
-import { useAuth, useFirestore } from '@/firebase';
+import { doc, serverTimestamp } from 'firebase/firestore';
+import { useAuth, useFirestore, setDocumentNonBlocking } from '@/firebase';
 import { Button } from '@/components/ui/button';
 import {
   Form,
@@ -22,7 +23,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
-import { setDocumentNonBlocking } from '@/firebase/non-blocking-updates';
+import { useRouter } from 'next/navigation';
 
 const formSchema = z.object({
   displayName: z.string().optional(),
@@ -42,6 +43,7 @@ export function AuthForm({ isSignUp }: AuthFormProps) {
   const auth = useAuth();
   const firestore = useFirestore();
   const { toast } = useToast();
+  const router = useRouter();
   const [isSubmitting, setIsSubmitting] = React.useState(false);
 
   const form = useForm<FormData>({
@@ -73,7 +75,6 @@ export function AuthForm({ isSignUp }: AuthFormProps) {
         const user = userCredential.user;
         const userRef = doc(firestore, 'users', user.uid);
         
-        // Use non-blocking update
         setDocumentNonBlocking(userRef, {
           uid: user.uid,
           displayName: data.displayName,
@@ -92,7 +93,7 @@ export function AuthForm({ isSignUp }: AuthFormProps) {
           description: "You've successfully logged in!",
         });
       }
-      // Redirect is handled by AuthProvider
+       router.push('/dashboard');
     } catch (error: any) {
       console.error('Authentication error:', error);
       toast({
@@ -107,10 +108,10 @@ export function AuthForm({ isSignUp }: AuthFormProps) {
   };
 
   return (
-    <div className="w-full max-w-md">
+    <div className="w-full max-w-md p-8 space-y-8 bg-card/70 backdrop-blur-sm rounded-xl shadow-2xl shadow-primary/10">
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-          <h2 className="text-2xl font-headline font-bold text-center">
+          <h2 className="text-3xl font-headline font-bold text-center bg-gradient-to-br from-primary via-pink-500 to-orange-500 bg-clip-text text-transparent">
             {isSignUp ? 'Create an Account' : 'Welcome Back'}
           </h2>
 
@@ -158,7 +159,7 @@ export function AuthForm({ isSignUp }: AuthFormProps) {
             )}
           />
 
-          <Button type="submit" className="w-full" disabled={isSubmitting}>
+          <Button type="submit" className="w-full shadow-lg shadow-primary/30" disabled={isSubmitting}>
             {isSubmitting
               ? 'Processing...'
               : isSignUp

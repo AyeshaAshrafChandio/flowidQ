@@ -1,109 +1,121 @@
 /**
- * @file Firestore Security Rules for FlowIDQ - Prototyping Mode
+ * @file Firestore Security Rules for SecurePass application.
  *
- * @Core Philosophy:
+ * Core Philosophy:
  * This ruleset enforces a strict user-ownership model for user profiles and documents.
- * Queues and locations are publicly readable, but writes are generally restricted in this prototype.
+ * Access to queue and location data is generally public, but write access is restricted.
+ * Authorization relies primarily on the authenticated user's UID and path-based checks.
  *
- * @Data Structure:
- * - User profiles are stored in `/users/{userId}`.
- * - User documents are stored in `/users/{userId}/documents/{documentId}`.
- * - QR codes are stored in `/qrcodes/{qrCodeId}`.
- * - Locations are stored in `/locations/{locationId}`.
- * - Queues are stored in `/locations/{locationId}/queues/{queueId}`.
- * - Queue tokens are stored in `/queues/{queueId}/tokens/{tokenId}`.
- * - Access history is stored in `/access_history/{accessHistoryId}`.
+ * Data Structure:
+ * - User profiles are stored under `/users/{userId}`, where `{userId}` is the Firebase Authentication UID.
+ * - Documents are stored under `/users/{userId}/documents/{documentId}`, ensuring user-specific access.
+ * - QR codes are stored under `/qrcodes/{qrCodeId}`.
+ * - Locations are stored under `/locations/{locationId}`.
+ * - Queues are stored under `/locations/{locationId}/queues/{queueId}`.
+ * - Queue tokens are stored under `/queues/{queueId}/tokens/{tokenId}`.
+ * - Access history logs are stored under `/access_history/{accessHistoryId}`.
  *
- * @Key Security Decisions:
- * - User listing is disallowed.
- * - The /access_history collection is globally writeable to allow logging, but modification is restricted.
- * - QR code access requires custom logic (OTP/password) and is not fully implemented in this prototype.
- * - Read operations are generally open for locations and queues to allow unauthenticated access.
+ * Key Security Decisions:
+ * - Users can only access their own profile and documents.
+ * - Listing user profiles is disallowed for privacy.
+ * - Public read access is granted to locations, queues, and access history.
+ * - QR code access requires custom logic (not fully implemented in this prototype).
+ * - Write access to access history is denied except for creation by backend.
  *
- * @Denormalization for Authorization:
- * - Documents include a `userId` field to enable simple ownership checks.
- *
- * @Structural Segregation:
- * - User data and public data (locations, queues) are stored in separate top-level collections.
+ * Denormalization for Authorization:
+ * - Documents include a `userId` field to enforce ownership, avoiding costly `get()` calls.
  */
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
     /**
-     * @description Allows a user to read and write their own profile data.
+     * @description Allows users to read and write their own profile data.
      * @path /users/{userId}
-     * @allow (create) request.auth.uid == '{userId}'
-     * @allow (get) request.auth.uid == '{userId}'
-     * @deny (create) request.auth.uid != '{userId}'
-     * @deny (update) request.auth.uid != '{userId}'
-     * @deny (delete) request.auth.uid != '{userId}'
-     * @principle Enforces document ownership for writes.  Allows self-creation.
+     * @allow (create) User with UID 'user_abc' can create their profile.
+     * @allow (get) User with UID 'user_abc' can read their profile.
+     * @allow (update) User with UID 'user_abc' can update their profile.
+     * @allow (delete) User with UID 'user_abc' can delete their profile.
+     * @deny (create) User with UID 'user_xyz' cannot create a profile with ID 'user_abc'.
+     * @deny (get) User with UID 'user_xyz' cannot read profile with ID 'user_abc'.
+     * @principle Enforces document ownership for writes.
      */
     match /users/{userId} {
-      function isOwner(userId) {
-        return request.auth.uid == userId;
-      }
       function isSignedIn() {
         return request.auth != null;
       }
+
+      function isOwner(userId) {
+        return request.auth.uid == userId;
+      }
+
+      function isExistingOwner(userId) {
+        return isOwner(userId) && exists(resource);
+      }
+
       allow get: if isOwner(userId);
-      allow list: if false;
-      allow create: if isSignedIn() && request.auth.uid == userId;
-      allow update: if isOwner(userId);
-      allow delete: if isOwner(userId);
+      allow list: if false; // Do not allow listing of users.
+      allow create: if isSignedIn() && isOwner(userId) && request.resource.data.id == userId;
+      allow update: if isExistingOwner(userId) && request.resource.data.id == resource.data.id;
+      allow delete: if isExistingOwner(userId);
     }
 
     /**
-     * @description Allows a user to read and write their own documents.
+     * @description Allows users to manage their own documents.
      * @path /users/{userId}/documents/{documentId}
-     * @allow (create) request.auth.uid == '{userId}'
-     * @allow (get) request.auth.uid == '{userId}'
-     * @deny (create) request.auth.uid != '{userId}'
-     * @deny (update) request.auth.uid != '{userId}'
-     * @deny (delete) request.auth.uid != '{userId}'
-     * @principle Enforces document ownership for writes.  Allows self-creation.
+     * @allow (create) User with UID 'user_abc' can create a document in their own folder.
+     * @allow (get) User with UID 'user_abc' can read a document in their own folder.
+     * @allow (update) User with UID 'user_abc' can update a document in their own folder.
+     * @allow (delete) User with UID 'user_abc' can delete a document in their own folder.
+     * @deny (create) User with UID 'user_xyz' cannot create a document in 'user_abc' folder.
+     * @deny (get) User with UID 'user_xyz' cannot read document in 'user_abc' folder.
+     * @principle Enforces document ownership for writes.
      */
     match /users/{userId}/documents/{documentId} {
-      function isOwner(userId) {
-        return request.auth.uid == userId;
-      }
       function isSignedIn() {
         return request.auth != null;
       }
+
+      function isOwner(userId) {
+        return request.auth.uid == userId;
+      }
+
+      function isExistingOwner(userId) {
+        return isOwner(userId) && exists(resource);
+      }
+
       allow get: if isOwner(userId);
-      allow list: if false;
-      allow create: if isOwner(userId);
-      allow update: if isOwner(userId);
-      allow delete: if isOwner(userId);
+      allow list: if isOwner(userId);
+      allow create: if isSignedIn() && isOwner(userId) && request.resource.data.userId == userId;
+      allow update: if isExistingOwner(userId) && request.resource.data.userId == resource.data.userId;
+      allow delete: if isExistingOwner(userId);
     }
 
     /**
-     * @description Allows access to QR codes. Custom validation required for OTP/password.
+     * @description Allows read access to QR code information, but requires custom logic for access validation.
      * @path /qrcodes/{qrCodeId}
-     * @allow (get) true
-     * @deny (create) false
-     * @deny (update) false
-     * @deny (delete) false
-     * @principle Requires custom validation based on OTP/password.
+     * @allow (get) Any user can attempt to read QR code information. Further validation (OTP, password) would be needed.
+     * @deny (create) No user can create qrcode.
+     * @deny (update) No user can update qrcode.
+     *
+     * @principle Requires custom validation logic (OTP, password) to control access.
      */
     match /qrcodes/{qrCodeId} {
       allow get: if true;
       allow list: if false;
-      allow create: if false; // TODO: Implement custom logic for QR code creation.
-      allow update: if false; // TODO: Implement custom logic for QR code updates.
-      allow delete: if false; // TODO: Implement custom logic for QR code deletion.
+      allow create: if false;
+      allow update: if false;
+      allow delete: if false;
+      // TODO: Add OTP/password validation logic.
     }
 
     /**
-     * @description Allows public read access to locations.  Write access is restricted in this prototype.
+     * @description Allows public read access to location data.
      * @path /locations/{locationId}
-     * @allow (get) true
-     * @allow (list) true
-     * @deny (create) false
-     * @deny (update) false
-     * @deny (delete) false
-     * @principle Allows public read, restricts writes in this prototype.
+     * @allow (get) Any user can read location data.
+     * @deny (create) No user can create location.
+     * @deny (update) No user can update location.
+     * @principle Allows public read access for location data.
      */
     match /locations/{locationId} {
       allow get: if true;
@@ -114,14 +126,12 @@ service cloud.firestore {
     }
 
     /**
-     * @description Allows public read access to queues.  Write access is restricted in this prototype.
+     * @description Allows public read access to queue data within a location.
      * @path /locations/{locationId}/queues/{queueId}
-     * @allow (get) true
-     * @allow (list) true
-     * @deny (create) false
-     * @deny (update) false
-     * @deny (delete) false
-     * @principle Allows public read, restricts writes in this prototype.
+     * @allow (get) Any user can read queue data.
+     * @deny (create) No user can create queue.
+     * @deny (update) No user can update queue.
+     * @principle Allows public read access for queue data.
      */
     match /locations/{locationId}/queues/{queueId} {
       allow get: if true;
@@ -132,34 +142,31 @@ service cloud.firestore {
     }
 
     /**
-     * @description Allows read/write to queue tokens.
+     * @description Allows read and write queue tokens.
      * @path /queues/{queueId}/tokens/{tokenId}
-     * @allow (get) true
-     * @allow (list) true
-     * @deny (create) false
-     * @deny (update) false
-     * @deny (delete) false
+     * @allow (get) Any user can read queue tokens.
+     * @deny (create) No user can create queue token.
+     * @deny (update) No user can update queue token.
      */
     match /queues/{queueId}/tokens/{tokenId} {
-        allow get: if true;
-        allow list: if false;
-        allow create: if false;
-        allow update: if false;
-        allow delete: if false;
+      allow get: if true;
+      allow list: if true;
+      allow create: if false;
+      allow update: if false;
+      allow delete: if false;
     }
 
     /**
-     * @description Allows anyone to create access history entries, but restricts modifications.
+     * @description Allows public read access to access history, but restricts modification.
      * @path /access_history/{accessHistoryId}
-     * @allow (create) true
-     * @deny (update) false
-     * @deny (delete) false
-     * @principle Allows public logging of access history, restricts modifications.
+     * @allow (get) Any user can read access history.
+     * @deny (create) No user can create access history.
+     * @deny (update) No user can update access history.
      */
     match /access_history/{accessHistoryId} {
       allow get: if true;
-      allow list: if false;
-      allow create: if true;
+      allow list: if true;
+      allow create: if false;
       allow update: if false;
       allow delete: if false;
     }
