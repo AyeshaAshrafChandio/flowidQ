@@ -4,73 +4,74 @@
 
 @layer base {
   :root {
-    --background: 234 43% 94%;
-    --foreground: 231 39% 25%;
-    --card: 234 43% 99%;
-    --card-foreground: 231 39% 25%;
-    --popover: 234 43% 99%;
-    --popover-foreground: 231 39% 25%;
-    --primary: 231 48% 48%;
+    --background: 260 100% 97%;
+    --foreground: 240 10% 3.9%;
+    --card: 260 100% 99%;
+    --card-foreground: 240 10% 3.9%;
+    --popover: 260 100% 99%;
+    --popover-foreground: 240 10% 3.9%;
+    --primary: 262 84% 58%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 231 40% 88%;
-    --secondary-foreground: 231 39% 25%;
-    --muted: 231 40% 88%;
-    --muted-foreground: 231 39% 45%;
-    --accent: 253 100% 65%;
+    --secondary: 330 84% 96%;
+    --secondary-foreground: 336 78% 34%;
+    --muted: 240 5% 90%;
+    --muted-foreground: 240 4% 46%;
+    --accent: 33 91% 55%;
     --accent-foreground: 0 0% 100%;
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 0 0% 98%;
-    --border: 231 30% 82%;
-    --input: 231 30% 82%;
-    --ring: 253 100% 65%;
-    --chart-1: 231 48% 48%;
-    --chart-2: 253 100% 65%;
+    --border: 260 40% 90%;
+    --input: 260 40% 90%;
+    --ring: 33 91% 55%;
+    --chart-1: 262 84% 58%;
+    --chart-2: 33 91% 55%;
     --chart-3: 197 37% 24%;
     --chart-4: 43 74% 66%;
     --chart-5: 27 87% 67%;
-    --radius: 0.5rem;
-    --sidebar-background: 234 43% 99%;
-    --sidebar-foreground: 231 39% 25%;
-    --sidebar-primary: 231 48% 48%;
+    --radius: 0.75rem;
+    --sidebar-background: 260 100% 99%;
+    --sidebar-foreground: 240 10% 3.9%;
+    --sidebar-primary: 262 84% 58%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 231 40% 88%;
-    --sidebar-accent-foreground: 231 39% 25%;
-    --sidebar-border: 231 30% 82%;
-    --sidebar-ring: 253 100% 65%;
+    --sidebar-accent: 330 84% 96%;
+    --sidebar-accent-foreground: 336 78% 34%;
+    --sidebar-border: 260 40% 90%;
+    --sidebar-ring: 33 91% 55%;
   }
+
   .dark {
-    --background: 231 22% 11%;
-    --foreground: 234 43% 94%;
-    --card: 231 22% 15%;
-    --card-foreground: 234 43% 94%;
-    --popover: 231 22% 11%;
-    --popover-foreground: 234 43% 94%;
-    --primary: 231 48% 68%;
-    --primary-foreground: 231 22% 11%;
-    --secondary: 231 22% 20%;
-    --secondary-foreground: 234 43% 94%;
-    --muted: 231 22% 20%;
-    --muted-foreground: 234 43% 74%;
-    --accent: 253 100% 75%;
-    --accent-foreground: 231 22% 11%;
+    --background: 240 10% 3.9%;
+    --foreground: 0 0% 98%;
+    --card: 240 10% 3.9%;
+    --card-foreground: 0 0% 98%;
+    --popover: 240 10% 3.9%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 262 84% 58%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 336 78% 14%;
+    --secondary-foreground: 330 84% 96%;
+    --muted: 240 4% 16%;
+    --muted-foreground: 240 5% 65%;
+    --accent: 33 91% 55%;
+    --accent-foreground: 240 10% 3.9%;
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 0 0% 98%;
-    --border: 231 22% 25%;
-    --input: 231 22% 25%;
-    --ring: 253 100% 75%;
-    --chart-1: 231 48% 68%;
-    --chart-2: 253 100% 75%;
+    --border: 240 4% 16%;
+    --input: 240 4% 16%;
+    --ring: 33 91% 55%;
+    --chart-1: 262 84% 58%;
+    --chart-2: 33 91% 55%;
     --chart-3: 30 80% 55%;
     --chart-4: 280 65% 60%;
     --chart-5: 340 75% 55%;
-    --sidebar-background: 231 22% 15%;
-    --sidebar-foreground: 234 43% 94%;
-    --sidebar-primary: 231 48% 68%;
-    --sidebar-primary-foreground: 231 22% 11%;
-    --sidebar-accent: 231 22% 20%;
-    --sidebar-accent-foreground: 234 43% 94%;
-    --sidebar-border: 231 22% 25%;
-    --sidebar-ring: 253 100% 75%;
+    --sidebar-background: 240 10% 3.9%;
+    --sidebar-foreground: 0 0% 98%;
+    --sidebar-primary: 262 84% 58%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 336 78% 14%;
+    --sidebar-accent-foreground: 330 84% 96%;
+    --sidebar-border: 240 4% 16%;
+    --sidebar-ring: 33 91% 55%;
   }
 }
 
@@ -81,4 +82,12 @@
   body {
     @apply bg-background text-foreground;
   }
+}
+
+.gradient-background {
+  @apply bg-gradient-to-br from-purple-50 via-pink-50 to-orange-50;
+}
+
+.dark .gradient-background {
+  @apply bg-gradient-to-br from-purple-950/20 via-pink-950/20 to-orange-950/20;
 }
