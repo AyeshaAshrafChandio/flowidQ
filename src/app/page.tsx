@@ -1,5 +1,4 @@
 import Link from 'next/link';
-import Image from 'next/image';
 import {
   ArrowRight,
   ShieldCheck,
@@ -11,6 +10,8 @@ import {
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Logo } from '@/components/logo';
+import UserNav from '@/components/user-nav';
+import { useUser } from '@/firebase';
 
 const features = [
   {
@@ -40,20 +41,39 @@ const features = [
   },
 ];
 
+function AuthButtons() {
+  const { user, isUserLoading } = useUser();
+
+  if (isUserLoading) {
+    return null;
+  }
+
+  if (user) {
+    return <UserNav />;
+  }
+
+  return (
+    <>
+      <Button variant="ghost" asChild>
+        <Link href="/login">Login</Link>
+      </Button>
+      <Button asChild className="shadow-lg shadow-primary/30">
+        <Link href="/signup">
+          Get Started <ArrowRight className="ml-2 h-4 w-4" />
+        </Link>
+      </Button>
+    </>
+  );
+}
+
+
 export default function LandingPage() {
   return (
     <div className="flex min-h-screen flex-col bg-transparent">
       <header className="container mx-auto flex h-20 items-center justify-between px-4 md:px-6">
         <Logo />
         <nav className="flex items-center gap-4">
-          <Button variant="ghost" asChild>
-            <Link href="/login">Login</Link>
-          </Button>
-          <Button asChild className="shadow-lg shadow-primary/30">
-            <Link href="/signup">
-              Get Started <ArrowRight className="ml-2 h-4 w-4" />
-            </Link>
-          </Button>
+          <AuthButtons />
         </nav>
       </header>
 

@@ -1,6 +1,8 @@
 import type { Metadata } from 'next';
 import './globals.css';
 import { Toaster } from '@/components/ui/toaster';
+import { FirebaseClientProvider } from '@/firebase';
+import AuthProvider from '@/components/auth-provider';
 
 export const metadata: Metadata = {
   title: 'FlowIDQ',
@@ -20,8 +22,12 @@ export default function RootLayout({
         <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300..700&family=Inter:wght@100..900&family=Source+Code+Pro:ital,wght@0,200..900;1,200..900&display=swap" rel="stylesheet" />
       </head>
       <body className="font-body antialiased gradient-background">
-        {children}
-        <Toaster />
+        <FirebaseClientProvider>
+          <AuthProvider>
+            {children}
+            <Toaster />
+          </AuthProvider>
+        </FirebaseClientProvider>
       </body>
     </html>
   );

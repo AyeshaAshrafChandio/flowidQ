@@ -295,11 +295,11 @@
           "schema": {
             "$ref": "#/backend/entities/UserProfile"
           },
-          "description": "Stores user profile information.  Owned by the user (path-based ownership).",
+          "description": "Stores user profile information.  The 'userId' parameter is the Firebase Authentication UID.",
           "params": [
             {
               "name": "userId",
-              "description": "The unique identifier for the user."
+              "description": "The Firebase Authentication UID of the user."
             }
           ]
         }
@@ -311,31 +311,31 @@
           "schema": {
             "$ref": "#/backend/entities/Document"
           },
-          "description": "Stores documents owned by a specific user. Path based ownership secured via the /users/{userId} path. Includes 'userId' for data integrity.",
+          "description": "Stores documents for a specific user. The 'userId' parameter corresponds to the user's UID, ensuring only the user can access their documents.",
           "params": [
             {
               "name": "userId",
-              "description": "The unique identifier for the user."
+              "description": "The Firebase Authentication UID of the user."
             },
             {
               "name": "documentId",
-              "description": "The unique identifier for the document."
+              "description": "Unique identifier for the document."
             }
           ]
         }
       },
       {
-        "path": "/qrCodes/{qrCodeId}",
+        "path": "/qrcodes/{qrCodeId}",
         "definition": {
           "entityName": "QrCode",
           "schema": {
             "$ref": "#/backend/entities/QrCode"
           },
-          "description": "Stores QR code information.  This is a top level collection due to requiring lookups of QR codes without knowing the user, and due to it storing sensitive OTP and password data. Access is controlled by complex security rules validating document ownership and OTP/Password combinations.",
+          "description": "Stores QR code information. This collection requires custom security rules to validate access based on OTP/password.",
           "params": [
             {
               "name": "qrCodeId",
-              "description": "The unique identifier for the QR code."
+              "description": "Unique identifier for the QR code."
             }
           ]
         }
@@ -347,11 +347,11 @@
           "schema": {
             "$ref": "#/backend/entities/Location"
           },
-          "description": "Stores information about physical locations.",
+          "description": "Stores location information.",
           "params": [
             {
               "name": "locationId",
-              "description": "The unique identifier for the location."
+              "description": "Unique identifier for the location."
             }
           ]
         }
@@ -363,56 +363,56 @@
           "schema": {
             "$ref": "#/backend/entities/Queue"
           },
-          "description": "Stores queue information for a specific location. Path-based access control, secured under the /locations/{locationId} path.",
+          "description": "Stores queue information for a specific location.",
           "params": [
             {
               "name": "locationId",
-              "description": "The unique identifier for the location."
+              "description": "Unique identifier for the location."
             },
             {
               "name": "queueId",
-              "description": "The unique identifier for the queue."
+              "description": "Unique identifier for the queue."
             }
           ]
         }
       },
       {
-        "path": "/users/{userId}/queueTokens/{queueTokenId}",
+        "path": "/queues/{queueId}/tokens/{tokenId}",
         "definition": {
           "entityName": "QueueToken",
           "schema": {
             "$ref": "#/backend/entities/QueueToken"
           },
-          "description": "Stores queue tokens assigned to users.  Path-based access control, secured under the /users/{userId} path.  Includes 'userId' for data integrity.",
+          "description": "Stores queue tokens for a specific queue.",
           "params": [
             {
-              "name": "userId",
-              "description": "The unique identifier for the user."
+              "name": "queueId",
+              "description": "Unique identifier for the queue."
             },
             {
-              "name": "queueTokenId",
-              "description": "The unique identifier for the queue token."
+              "name": "tokenId",
+              "description": "Unique identifier for the queue token."
             }
           ]
         }
       },
       {
-        "path": "/accessHistory/{accessHistoryId}",
+        "path": "/access_history/{accessHistoryId}",
         "definition": {
           "entityName": "AccessHistory",
           "schema": {
             "$ref": "#/backend/entities/AccessHistory"
           },
-          "description": "Stores access history entries for documents. Top level collection for querying and analysis. Contains documentId and userId, allowing aggregation of access.",
+          "description": "Stores access history for documents. This collection is globally accessible for logging, with security rules restricting modification.",
           "params": [
             {
               "name": "accessHistoryId",
-              "description": "The unique identifier for the access history entry."
+              "description": "Unique identifier for the access history entry."
             }
           ]
         }
       }
     ],
-    "reasoning": "The Firestore structure is designed to ensure security, scalability, and ease of debugging, adhering to the principles of Authorization Independence, Clarity of Intent, DBAC, and QAPs.  \n\n**Authorization Independence:**  Authorization independence is achieved through denormalization. For instance, access to documents is governed by the user's ownership. This information is embedded within the document path (`/users/{userId}/documents/{documentId}`). This avoids the need for `get()` calls in security rules to check the user's role or permissions, allowing for atomic operations.\n\n**Structural Segregation:** Data with different security requirements is segregated into different collections. User profiles are stored separately from documents and queues. This allows us to apply specific security rules to each collection based on its data sensitivity.\n\n**Access Modeling:**  The structure follows a consistent access modeling pattern:\n\n*   **Private Data:** User-owned data (documents, queue tokens) is stored under the `/users/{userId}` path, providing path-based ownership.\n*   **Hierarchical Paths:** Nested data relationships (e.g., User -> Documents, Location -> Queues) are represented through hierarchical paths, simplifying security rules.\n*   **Collaborative Data:** While not explicitly present in the initial entity definitions, if collaborative document access were a feature, a `members` map within the Document entity would be used.\n\n**QAPs (Rules are not Filters):**\n\n*   The segregation of data into different collections based on ownership and access level ensures that `list` operations are secure. For example, listing documents under `/users/{userId}/documents` only returns documents owned by that user, preventing unauthorized access.\n\n**Invariants:**\n\n*   The structure supports the integrity of ownership by explicitly including the `userId` in the document and queue token entities. Timestamps (`createdAt`, `uploadDate`, `assignedTime`) maintain data integrity.\n\n**Specific Path Justifications:**\n\n*   `/users/{userId}/documents/{documentId}`: This path provides a clear ownership model, allowing secure access to user-owned documents.\n*   `/locations/{locationId}/queues/{queueId}`: Represents queues at specific locations. The `locationId` field in the `Queue` documents denormalizes location ownership, enabling QAPs for queue listing and management.\n*   `/users/{userId}/queueTokens/{queueTokenId}`: This path securely associates queue tokens with specific users."
+    "reasoning": "The Firestore structure is designed to ensure security, scalability, and ease of debugging, adhering to the principles of Authorization Independence, Clarity of Intent, DBAC, and QAPs.  \n\n**Authorization Independence:**  Authorization independence is achieved through denormalization. For instance, access to documents is governed by the user's ID, stored directly within the document. Similarly, queues are linked to locations, and authorization can be checked against the user's role within the location if needed (though roles are not explicitly modeled in this design).  \n\n**Structural Segregation:**  Data with differing access requirements is segregated into distinct collections. User profiles are stored separately from documents. Documents are user-owned, stored under `/users/{userId}/documents/{documentId}`, ensuring only the user can access them.  \n\n**Access Modeling:**\n*   **Path-Based Ownership:** Documents are stored under the user's ID (`/users/{userId}/documents/{documentId}`), ensuring simple ownership-based security rules.\n*   **Hierarchical Paths:**  The user-document relationship is maintained through a hierarchical path.\n\n**QAPs (Rules are not Filters):** The structure facilitates secure `list` operations. Listing documents under `/users/{userId}/documents` is secure because the rule can simply check `request.auth.uid == userId`.  The design does not require filtering after reading data based on user roles or permissions; instead, the data accessible is inherently determined by the user's ID and the path structure.\n\n**Invariants:**  The structure supports invariants such as ownership, timestamps, and denormalized data. The `userId` field in documents enforces ownership. Timestamps like `uploadDate` and `generatedDate` ensure data integrity. While this design doesn't explicitly denormalize roles or permissions into the documents, the structure allows for it if collaborative features are added later, by including a `members` map within the document, facilitating Authorization Independence."
   }
 }
