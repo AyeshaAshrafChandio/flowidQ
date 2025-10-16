@@ -37,6 +37,9 @@ export default function Header() {
                <Link href="/queues">
                 <Button variant="ghost">Queues</Button>
               </Link>
+              <Link href="/my-tickets">
+                <Button variant="ghost">My Tickets</Button>
+              </Link>
               <Button variant="ghost" onClick={handleLogout}>
                 <LogOut className="mr-2 h-4 w-4" />
                 Log Out

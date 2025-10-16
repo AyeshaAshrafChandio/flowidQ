@@ -28,33 +28,23 @@ export default function QueuesPage() {
 
   const { data: queues, isLoading: isLoadingQueues } = useCollection(queuesQuery);
 
-  useEffect(() => {
-    if (!isUserLoading && !user) {
-      router.push('/login');
-    }
-  }, [user, isUserLoading, router]);
-
   // Effect to check which queues the user has already joined
   useEffect(() => {
-    if (!firestore || !user || !queues || queues.length === 0) return;
+    if (!firestore || !user) return;
 
     const checkJoinedQueues = async () => {
-      const joinedIds: string[] = [];
-      for (const queue of queues) {
         const q = query(
-          collection(firestore, 'queues', queue.id, 'queueEntries'),
+          collection(firestore, 'queueEntries'), 
           where('userId', '==', user.uid),
           where('status', '==', 'waiting')
         );
         const querySnapshot = await getDocs(q);
-        if (!querySnapshot.empty) {
-          joinedIds.push(queue.id);
-        }
-      }
-      setUserJoinedQueueIds(joinedIds);
+        const joinedIds = querySnapshot.docs.map(doc => doc.data().queueId);
+        setUserJoinedQueueIds(joinedIds);
     };
 
     checkJoinedQueues();
+    // Re-check when queues data changes as well, in case this runs before queues are loaded
   }, [firestore, user, queues]);
 
 
@@ -75,6 +65,7 @@ export default function QueuesPage() {
       }
 
       const queueRef = doc(firestore, 'queues', queue.id);
+      let newTicketNumber = 0;
 
       await runTransaction(firestore, async (transaction) => {
         const queueDoc = await transaction.get(queueRef);
@@ -83,27 +74,27 @@ export default function QueuesPage() {
         }
 
         const queueData = queueDoc.data();
-        const newTicketNumber = (queueData.lastTicketNumber || 0) + 1;
+        newTicketNumber = (queueData.lastTicketNumber || 0) + 1;
         
-        // Create a new entry in the queue's subcollection
-        const newEntryRef = doc(collection(firestore, 'queues', queue.id, 'queueEntries'));
-        transaction.set(newEntryRef, {
-          userId: user.uid,
-          ticketNumber: newTicketNumber,
-          entryTime: serverTimestamp(),
-          status: 'waiting',
-          userName: user.displayName || 'Anonymous',
-          queueId: queue.id,
-        });
-
         // Update the main queue document
         transaction.update(queueRef, {
           lastTicketNumber: newTicketNumber,
           totalInQueue: (queueData.totalInQueue || 0) + 1,
         });
       });
+
+      // After the transaction, create the user's entry in the global collection
+      await addDoc(collection(firestore, 'queueEntries'), {
+          userId: user.uid,
+          ticketNumber: newTicketNumber,
+          entryTime: serverTimestamp(),
+          status: 'waiting',
+          userName: user.displayName || 'Anonymous',
+          queueId: queue.id,
+      });
+
       
-      toast.success(`Successfully joined "${queue.name}" with ticket #${(queue.lastTicketNumber || 0) + 1}!`);
+      toast.success(`Successfully joined "${queue.name}" with ticket #${newTicketNumber}!`);
       setUserJoinedQueueIds(prev => [...prev, queue.id]);
 
     } catch (error: any) {

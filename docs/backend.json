@@ -292,6 +292,10 @@
     "/queues/{queueId}/queueEntries/{queueEntryId}": {
       "schema": { "$ref": "#/entities/QueueEntry" },
       "description": "Stores the tickets for each user in a specific queue."
+    },
+    "/queueEntries/{queueEntryId}": {
+        "schema": { "$ref": "#/entities/QueueEntry"},
+        "description": "Global collection of all queue entries for easy querying by user."
     }
   }
 }
