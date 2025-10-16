@@ -1,19 +1,21 @@
 'use client';
 
-import { useUser, useFirestore, useCollection, useMemoFirebase, addDocumentNonBlocking } from '@/firebase';
+import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
 import { getStorage, ref, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebase/storage';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState, useRef } from 'react';
 import Header from '@/components/header';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Upload, FileText, Trash2, Loader2, QrCode, X } from 'lucide-react';
+import { Upload, FileText, Trash2, Loader2, QrCode, X, Edit, Save, FileEdit } from 'lucide-react';
 import { Input } from '@/components/ui/input';
-import { Checkbox } from "@/components/ui/checkbox"
-import { collection, query, orderBy, serverTimestamp, deleteDoc, doc, addDoc } from 'firebase/firestore';
+import { Checkbox } from "@/components/ui/checkbox";
+import { collection, query, orderBy, serverTimestamp, deleteDoc, doc, addDoc, updateDoc } from 'firebase/firestore';
 import toast from 'react-hot-toast';
 import QRCode from 'qrcode.react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogClose } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
+
 
 export default function DocumentsPage() {
   const { user, isUserLoading } = useUser();
@@ -27,6 +29,8 @@ export default function DocumentsPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [selectedDocs, setSelectedDocs] = useState<string[]>([]);
   const [generatedQrValue, setGeneratedQrValue] = useState<string | null>(null);
+  const [editingDocId, setEditingDocId] = useState<string | null>(null);
+  const [editingDocName, setEditingDocName] = useState('');
 
   const documentsQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
@@ -82,12 +86,12 @@ export default function DocumentsPage() {
         setSelectedFile(null);
       },
       () => {
-        getDownloadURL(uploadTask.snapshot.ref).then((downloadURL) => {
+        getDownloadURL(uploadTask.snapshot.ref).then(async (downloadURL) => {
           const documentsColRef = collection(firestore, 'users', user.uid, 'documents');
-          addDocumentNonBlocking(documentsColRef, {
+          await addDoc(documentsColRef, {
             name: file.name,
             fileUrl: downloadURL,
-            storagePath: storageRef.fullPath, // Save storage path for deletion
+            storagePath: storageRef.fullPath,
             uploadDate: serverTimestamp(),
             category: file.type,
             isEncrypted: true,
@@ -105,7 +109,6 @@ export default function DocumentsPage() {
 
   const handleDelete = async (docId: string, storagePath: string) => {
     if (!user || !firestore) return;
-    if (!confirm('Are you sure you want to delete this document?')) return;
     
     const docRef = doc(firestore, 'users', user.uid, 'documents', docId);
     const storageRef = ref(storage, storagePath);
@@ -118,6 +121,34 @@ export default function DocumentsPage() {
     } catch (error) {
       console.error('Error deleting document:', error);
       toast.error('Failed to delete document.');
+    }
+  };
+  
+  const handleEdit = (doc: { id: string, name: string }) => {
+    setEditingDocId(doc.id);
+    setEditingDocName(doc.name);
+  };
+
+  const handleCancelEdit = () => {
+    setEditingDocId(null);
+    setEditingDocName('');
+  };
+
+  const handleUpdateName = async (docId: string) => {
+    if (!user || !firestore || !editingDocName.trim()) {
+      toast.error('Document name cannot be empty.');
+      return;
+    }
+    
+    const docRef = doc(firestore, 'users', user.uid, 'documents', docId);
+    
+    try {
+      await updateDoc(docRef, { name: editingDocName });
+      toast.success('Document renamed successfully.');
+      handleCancelEdit();
+    } catch (error) {
+      console.error('Error updating document name:', error);
+      toast.error('Failed to rename document.');
     }
   };
 
@@ -231,7 +262,7 @@ export default function DocumentsPage() {
           <CardHeader>
             <CardTitle>Your Documents</CardTitle>
             <CardDescription>
-              Select documents to generate a sharing QR code or upload new ones.
+              Select, edit, and manage your documents. Generate a QR code to share.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -244,24 +275,71 @@ export default function DocumentsPage() {
               {!isLoadingDocuments && documents && documents.length > 0 ? (
                 documents.map((doc) => (
                   <div key={doc.id} className="flex items-center justify-between p-3 rounded-lg bg-secondary/50 hover:bg-secondary/70 transition-colors">
-                    <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-4 flex-grow">
                       <Checkbox
                         id={`select-${doc.id}`}
                         checked={selectedDocs.includes(doc.id)}
                         onCheckedChange={() => handleDocSelection(doc.id)}
                         aria-label={`Select document ${doc.name}`}
+                        disabled={!!editingDocId}
                       />
                       <FileText className="h-6 w-6 text-primary" />
-                      <div>
-                        <label htmlFor={`select-${doc.id}`} className="font-medium cursor-pointer">{doc.name}</label>
-                        <p className="text-sm text-muted-foreground">
-                          Uploaded on {doc.uploadDate ? new Date(doc.uploadDate.seconds * 1000).toLocaleDateString() : 'Just now'}
-                        </p>
-                      </div>
+                      {editingDocId === doc.id ? (
+                        <div className="flex-grow flex items-center gap-2">
+                           <Input 
+                             value={editingDocName}
+                             onChange={(e) => setEditingDocName(e.target.value)}
+                             className="h-8"
+                             autoFocus
+                           />
+                        </div>
+                      ) : (
+                        <div>
+                          <label htmlFor={`select-${doc.id}`} className="font-medium cursor-pointer">{doc.name}</label>
+                          <p className="text-sm text-muted-foreground">
+                            Uploaded on {doc.uploadDate ? new Date(doc.uploadDate.seconds * 1000).toLocaleDateString() : 'Just now'}
+                          </p>
+                        </div>
+                      )}
                     </div>
-                    <Button variant="ghost" size="icon" onClick={() => handleDelete(doc.id, doc.storagePath)}>
-                      <Trash2 className="h-4 w-4 text-red-500 hover:text-red-400" />
-                    </Button>
+                    <div className="flex items-center gap-1">
+                      {editingDocId === doc.id ? (
+                        <>
+                          <Button variant="ghost" size="icon" onClick={() => handleUpdateName(doc.id)}>
+                            <Save className="h-4 w-4 text-green-500" />
+                          </Button>
+                          <Button variant="ghost" size="icon" onClick={handleCancelEdit}>
+                            <X className="h-4 w-4 text-red-500" />
+                          </Button>
+                        </>
+                      ) : (
+                        <>
+                          <Button variant="ghost" size="icon" onClick={() => handleEdit(doc)}>
+                            <FileEdit className="h-4 w-4" />
+                          </Button>
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button variant="ghost" size="icon">
+                                <Trash2 className="h-4 w-4 text-red-500 hover:text-red-400" />
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  This action cannot be undone. This will permanently delete your
+                                  document and remove your data from our servers.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                <AlertDialogAction onClick={() => handleDelete(doc.id, doc.storagePath)}>Continue</AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        </>
+                      )}
+                    </div>
                   </div>
                 ))
               ) : (
