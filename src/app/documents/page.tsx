@@ -2,7 +2,7 @@
 'use client';
 
 import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
-import { getStorage, ref, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebase/storage';
+import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState, useRef } from 'react';
 import Header from '@/components/header';
@@ -65,6 +65,7 @@ export default function DocumentsPage() {
     if (file) {
       handleUpload(file);
     }
+     // Reset the file input so the user can upload the same file again
      if (fileInputRef.current) {
         fileInputRef.current.value = '';
      }
@@ -86,24 +87,23 @@ export default function DocumentsPage() {
       fileName: file.name,
       status: 'uploading',
     };
-
+    
+    // Optimistically add to UI immediately
     setOptimisticUploads(prev => [newUpload, ...prev]);
 
-    const storage = getStorage();
-    const storageRef = ref(storage, `documents/${user.uid}/${Date.now()}_${file.name}`);
-    const uploadTask = uploadBytesResumable(storageRef, file);
-
-    uploadTask.on('state_changed',
-      null, // Not using progress updates to make it feel faster
-      (error) => {
-        console.error("Upload failed:", error);
-        toast.error(`Upload of "${file.name}" failed.`);
-        setOptimisticUploads(prev => prev.map(up => up.id === optimisticId ? { ...up, status: 'error', error: 'Upload to storage failed' } : up));
-      },
-      () => {
-        // This is the success callback for the upload itself.
-        // Now we get the URL and save to Firestore.
-        getDownloadURL(uploadTask.snapshot.ref).then(async (downloadURL) => {
+    // Perform the actual upload and DB operations in the background
+    const performUpload = async () => {
+        try {
+            const storage = getStorage();
+            const storageRef = ref(storage, `documents/${user.uid}/${Date.now()}_${file.name}`);
+            
+            // 1. Upload file
+            await uploadBytes(storageRef, file);
+            
+            // 2. Get download URL
+            const downloadURL = await getDownloadURL(storageRef);
+            
+            // 3. Save to Firestore
             const docData = {
               name: file.name,
               fileUrl: downloadURL,
@@ -112,39 +112,28 @@ export default function DocumentsPage() {
               category: file.type,
               userId: user.uid,
             };
+            const docRef = await addDoc(collection(firestore, 'users', user.uid, 'documents'), docData);
+
+            // Once successful, remove from optimistic list. The real-time listener will add it to the main list.
+            setOptimisticUploads(prev => prev.filter(up => up.id !== optimisticId));
             
-            try {
-              const docRef = await addDoc(collection(firestore, 'users', user.uid, 'documents'), docData);
-              // The real-time listener will pick up the new doc, so we just remove the optimistic one.
-              setOptimisticUploads(prev => prev.filter(up => up.id !== optimisticId));
-              toast.success(`"${file.name}" uploaded successfully!`);
-
-              // AI analysis now runs completely in the background and does not block UI.
-              if (file.type.startsWith('image/')) {
-                  fileToDataURI(file).then(dataUri => {
-                      analyzeDocument({ photoDataUri: dataUri }).then(analysisResult => {
-                          // Silently update the doc with AI data in the background.
-                          updateDoc(docRef, { aiAnalysis: analysisResult });
-                      }).catch(aiError => {
-                          // Log AI errors but don't bother the user with a toast.
-                          console.error("AI analysis failed in background:", aiError);
-                      });
-                  });
-              }
-
-            } catch (dbError) {
-              console.error("Firestore save failed:", dbError);
-              toast.error(`Failed to save "${file.name}"`);
-              setOptimisticUploads(prev => prev.map(up => up.id === optimisticId ? { ...up, status: 'error', error: 'Save to database failed' } : up));
+            // Silently trigger AI analysis in the background
+            if (file.type.startsWith('image/')) {
+              const dataUri = await fileToDataURI(file);
+              const analysisResult = await analyzeDocument({ photoDataUri: dataUri });
+              // Silently update the doc with AI data in the background. Don't block UI.
+              await updateDoc(docRef, { aiAnalysis: analysisResult });
             }
 
-        }).catch((urlError) => {
-            console.error("Getting download URL failed:", urlError);
-            toast.error(`Processing of "${file.name}" failed.`);
-            setOptimisticUploads(prev => prev.map(up => up.id === optimisticId ? { ...up, status: 'error', error: 'Could not get file URL' } : up));
-        });
-      }
-    );
+        } catch (error) {
+            console.error("Upload failed:", error);
+            toast.error(`Upload of "${file.name}" failed.`);
+            // Update optimistic item to show error
+            setOptimisticUploads(prev => prev.map(up => up.id === optimisticId ? { ...up, status: 'error', error: 'Upload failed' } : up));
+        }
+    };
+    
+    performUpload();
   };
   
   const handleDelete = async (docId: string, storagePath: string) => {
@@ -258,11 +247,7 @@ export default function DocumentsPage() {
                 {optimisticUploads.map(upload => (
                   <div key={upload.id} className="flex items-center justify-between p-3 rounded-lg bg-secondary/50">
                     <div className="flex items-center gap-4 flex-grow">
-                      {upload.status === 'uploading' ? (
-                        <Loader2 className="h-6 w-6 text-primary animate-spin" />
-                      ) : (
-                        <FileText className="h-6 w-6 text-primary" />
-                      )}
+                      <FileText className="h-6 w-6 text-primary" />
                       <div className="flex-grow">
                           <p className="font-medium">{upload.fileName}</p>
                            {upload.status === 'error' ? (
@@ -271,13 +256,17 @@ export default function DocumentsPage() {
                                 <p className="text-xs font-medium">{upload.error}</p>
                               </div>
                            ) : (
-                             <p className="text-xs text-muted-foreground capitalize">{upload.status}...</p>
+                             <p className="text-xs text-muted-foreground">Syncing...</p>
                            )}
                       </div>
                     </div>
+                    {upload.status === 'uploading' ? (
+                        <Loader2 className="h-5 w-5 text-primary animate-spin" />
+                    ) : (
                      <Button variant="ghost" size="icon" onClick={() => setOptimisticUploads(p => p.filter(up => up.id !== upload.id))}>
                         <X className="h-4 w-4 text-red-500" />
                      </Button>
+                    )}
                   </div>
                 ))}
                 
@@ -347,5 +336,3 @@ export default function DocumentsPage() {
     </div>
   );
 }
-
-    
