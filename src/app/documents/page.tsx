@@ -101,78 +101,84 @@ export default function DocumentsPage() {
           fileInputRef.current.value = '';
         }
       },
-      async () => {
-        let docRef;
-        const toastId = toast.loading('Processing document...');
-        try {
-          const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
-          const documentsColRef = collection(firestore, 'users', user.uid, 'documents');
-          
-          const docData = {
-            name: file.name,
-            fileUrl: downloadURL,
-            storagePath: storageRef.fullPath,
-            uploadDate: serverTimestamp(),
-            category: file.type,
-            isEncrypted: true, 
-            userId: user.uid,
-          };
-          
-          docRef = await addDoc(documentsColRef, docData).catch(err => {
-              errorEmitter.emit('permission-error', new FirestorePermissionError({
-                  path: documentsColRef.path,
-                  operation: 'create',
-                  requestResourceData: docData
-              }));
-              throw err; 
-          });
-
-          toast.success('Document uploaded successfully ✅', { id: toastId });
-
-          // Start AI analysis only if the file is an image
-          if (file.type.startsWith('image/')) {
-            const aiToastId = toast.loading('AI is analyzing your document...');
+      () => {
+        // This function is called on successful upload to Storage.
+        // Now we handle Firestore and AI analysis, with guaranteed UI reset.
+        const processPostUpload = async () => {
+            let docRef;
+            const toastId = toast.loading('Processing document...');
             try {
-              const dataUri = await fileToDataURI(file);
-              const analysisResult = await analyzeDocument({ photoDataUri: dataUri });
+              const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+              const documentsColRef = collection(firestore, 'users', user.uid, 'documents');
               
-              const aiData = { aiAnalysis: analysisResult };
-              await updateDoc(docRef, aiData).catch(err => {
-                errorEmitter.emit('permission-error', new FirestorePermissionError({
-                    path: docRef!.path,
-                    operation: 'update',
-                    requestResourceData: aiData
-                }));
-                 throw err;
+              const docData = {
+                name: file.name,
+                fileUrl: downloadURL,
+                storagePath: storageRef.fullPath,
+                uploadDate: serverTimestamp(),
+                category: file.type,
+                isEncrypted: true, 
+                userId: user.uid,
+              };
+              
+              docRef = await addDoc(documentsColRef, docData).catch(err => {
+                  errorEmitter.emit('permission-error', new FirestorePermissionError({
+                      path: documentsColRef.path,
+                      operation: 'create',
+                      requestResourceData: docData
+                  }));
+                  throw err; 
               });
-              
-              toast.success(`AI detected: ${analysisResult.documentType}`, { id: aiToastId });
-
-            } catch (aiError) {
-              console.error("AI analysis failed:", aiError);
-              if (!String(aiError).includes('permission-error')) {
-                 toast.error('AI analysis failed, but your document was saved.', { id: aiToastId });
-              } else {
-                 toast.dismiss(aiToastId);
+    
+              toast.success('Document uploaded successfully ✅', { id: toastId });
+    
+              // Start AI analysis only if the file is an image
+              if (file.type.startsWith('image/')) {
+                const aiToastId = toast.loading('AI is analyzing your document...');
+                try {
+                  const dataUri = await fileToDataURI(file);
+                  const analysisResult = await analyzeDocument({ photoDataUri: dataUri });
+                  
+                  const aiData = { aiAnalysis: analysisResult };
+                  await updateDoc(docRef, aiData).catch(err => {
+                    errorEmitter.emit('permission-error', new FirestorePermissionError({
+                        path: docRef!.path,
+                        operation: 'update',
+                        requestResourceData: aiData
+                    }));
+                     throw err;
+                  });
+                  
+                  toast.success(`AI detected: ${analysisResult.documentType}`, { id: aiToastId });
+    
+                } catch (aiError) {
+                  console.error("AI analysis failed:", aiError);
+                  if (!String(aiError).includes('permission-error')) {
+                     toast.error('AI analysis failed, but your document was saved.', { id: aiToastId });
+                  } else {
+                     toast.dismiss(aiToastId);
+                  }
+                }
               }
+            } catch (error) {
+                console.error("Error during post-upload process:", error);
+                if (!String(error).includes('permission-error')) {
+                  toast.error('An error occurred while saving the document.', { id: toastId });
+                } else {
+                   toast.dismiss(toastId);
+                }
+            } finally {
+                // This block guarantees the UI is always reset
+                setIsUploading(false);
+                setUploadProgress(null);
+                setSelectedFile(null);
+                if (fileInputRef.current) {
+                  fileInputRef.current.value = '';
+                }
             }
-          }
-        } catch (error) {
-            console.error("Error during post-upload process:", error);
-            if (!String(error).includes('permission-error')) {
-              toast.error('An error occurred while saving the document.', { id: toastId });
-            } else {
-               toast.dismiss(toastId);
-            }
-        } finally {
-            // This block guarantees the UI is always reset
-            setIsUploading(false);
-            setUploadProgress(null);
-            setSelectedFile(null);
-            if (fileInputRef.current) {
-              fileInputRef.current.value = '';
-            }
-        }
+        };
+
+        processPostUpload();
       }
     );
   };
@@ -476,5 +482,3 @@ export default function DocumentsPage() {
     </div>
   );
 }
-
-    

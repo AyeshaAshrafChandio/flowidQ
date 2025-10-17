@@ -16,7 +16,7 @@ export default function RecordsPage() {
 
   // 1. Get all queue entries for the current user
   const userQueueEntriesQuery = useMemoFirebase(() => {
-    if (!firestore || !user) return null; // FIX: Ensure user exists before creating query
+    if (!firestore || !user) return null;
     return query(
       collectionGroup(firestore, 'queueEntries'),
       where('userId', '==', user.uid),
