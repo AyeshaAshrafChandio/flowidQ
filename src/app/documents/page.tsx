@@ -102,11 +102,9 @@ export default function DocumentsPage() {
         }
       },
       () => {
-        // This function is called on successful upload to Storage.
-        // Now we handle Firestore and AI analysis, with guaranteed UI reset.
         const processPostUpload = async () => {
-            let docRef;
             const toastId = toast.loading('Processing document...');
+            let docRef;
             try {
               const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
               const documentsColRef = collection(firestore, 'users', user.uid, 'documents');
@@ -132,7 +130,6 @@ export default function DocumentsPage() {
     
               toast.success('Document uploaded successfully ✅', { id: toastId });
     
-              // Start AI analysis only if the file is an image
               if (file.type.startsWith('image/')) {
                 const aiToastId = toast.loading('AI is analyzing your document...');
                 try {
@@ -168,7 +165,6 @@ export default function DocumentsPage() {
                    toast.dismiss(toastId);
                 }
             } finally {
-                // This block guarantees the UI is always reset
                 setIsUploading(false);
                 setUploadProgress(null);
                 setSelectedFile(null);
@@ -192,7 +188,6 @@ export default function DocumentsPage() {
     const toastId = toast.loading("Deleting document...");
 
     try {
-      // First, delete the Firestore document
       await deleteDoc(docRef).catch(err => {
         errorEmitter.emit('permission-error', new FirestorePermissionError({
             path: docRef.path,
@@ -201,7 +196,6 @@ export default function DocumentsPage() {
          throw err;
       });
 
-      // Then, delete the file from Storage
       await deleteObject(storageRef);
 
       toast.success('Document deleted successfully.', { id: toastId });
@@ -482,3 +476,5 @@ export default function DocumentsPage() {
     </div>
   );
 }
+
+    
