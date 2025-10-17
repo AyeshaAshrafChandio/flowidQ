@@ -8,6 +8,9 @@ import { Loader2, FileText, ShieldCheck, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { initializeFirebase } from '@/firebase';
+import { errorEmitter } from '@/firebase/error-emitter';
+import { FirestorePermissionError } from '@/firebase/errors';
+
 
 interface DecodedQrData {
     userId: string;
@@ -72,19 +75,24 @@ export default function VerifyComponent() {
                 }
                 
                 // Log the access
-                try {
-                    const accessLogColRef = collection(firestore, `users/${qrData.userId}/accessLogs`);
-                    await addDoc(accessLogColRef, {
-                        userId: qrData.userId,
-                        documentIds: qrData.documentIds,
-                        accessTime: serverTimestamp(),
-                        accessType: 'QR Code Scan',
-                        ipAddress: '0.0.0.0', // Placeholder
-                    });
-                } catch(e) {
-                    console.error("Failed to write access log:", e);
-                    // We don't block the user from seeing docs if logging fails
-                }
+                const accessLogColRef = collection(firestore, `users/${qrData.userId}/accessLogs`);
+                const logData = {
+                    userId: qrData.userId,
+                    documentIds: qrData.documentIds,
+                    accessTime: serverTimestamp(),
+                    accessType: 'QR Code Scan',
+                    ipAddress: '0.0.0.0', // Placeholder
+                };
+                
+                addDoc(accessLogColRef, logData).catch(err => {
+                    errorEmitter.emit('permission-error', new FirestorePermissionError({
+                        path: accessLogColRef.path,
+                        operation: 'create',
+                        requestResourceData: logData
+                    }));
+                    // We don't throw here to avoid blocking the user from seeing docs if logging fails.
+                    // The error will be surfaced by the FirebaseErrorListener.
+                });
 
 
                 setDocuments(docs);
@@ -146,5 +154,3 @@ export default function VerifyComponent() {
         </Card>
     );
 }
-
-    
