@@ -92,14 +92,13 @@ export default function DocumentsPage() {
     const uploadTask = uploadBytesResumable(storageRef, file);
 
     uploadTask.on('state_changed',
-      null, // Not using progress updates
+      null,
       (error) => {
         console.error("Upload failed:", error);
         toast.error(`Upload of "${file.name}" failed.`);
         setOptimisticUploads(prev => prev.map(up => up.id === optimisticId ? { ...up, status: 'error', error: 'Upload failed' } : up));
       },
       async () => {
-        // Upload complete, now save to Firestore
         try {
           const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
           const docData = {
@@ -113,19 +112,14 @@ export default function DocumentsPage() {
 
           const docRef = await addDoc(collection(firestore, 'users', user.uid, 'documents'), docData);
           
-          toast.success(`"${file.name}" uploaded successfully!`);
           setOptimisticUploads(prev => prev.filter(up => up.id !== optimisticId));
 
-          // AI analysis in the background
           if (file.type.startsWith('image/')) {
-            toast.loading(`AI is analyzing "${file.name}"...`, { id: 'ai-toast' });
             fileToDataURI(file).then(dataUri => {
               analyzeDocument({ photoDataUri: dataUri }).then(analysisResult => {
                 updateDoc(docRef, { aiAnalysis: analysisResult });
-                toast.success(`AI analysis complete for "${file.name}"`, { id: 'ai-toast' });
               }).catch(aiError => {
                 console.error("AI analysis failed:", aiError);
-                toast.error(`AI analysis failed for "${file.name}"`, { id: 'ai-toast' });
               });
             });
           }
@@ -245,7 +239,6 @@ export default function DocumentsPage() {
             </CardHeader>
             <CardContent>
                 <div className="space-y-4">
-                {isLoadingDocuments && <div className="flex justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>}
                 
                 {optimisticUploads.map(upload => (
                   <div key={upload.id} className="flex items-center justify-between p-3 rounded-lg bg-secondary/50">
@@ -273,7 +266,7 @@ export default function DocumentsPage() {
                   </div>
                 ))}
                 
-                {!isLoadingDocuments && documents && documents.map((doc) => (
+                {documents && documents.map((doc) => (
                     <div key={doc.id} className="flex items-center justify-between p-3 rounded-lg bg-secondary/50 hover:bg-secondary/70 transition-colors">
                         <div className="flex items-center gap-4 flex-grow">
                         <Checkbox id={`select-${doc.id}`} checked={selectedDocs.includes(doc.id)} onCheckedChange={() => setSelectedDocs(p => p.includes(doc.id) ? p.filter(id => id !== doc.id) : [...p, doc.id])} disabled={!!editingDoc} />
@@ -309,8 +302,15 @@ export default function DocumentsPage() {
                         </div>
                     </div>
                 ))}
-                {!isLoadingDocuments && !documents?.length && !optimisticUploads.length && (
-                    <div className="text-center py-12"><FileText className="mx-auto h-12 w-12 text-muted-foreground" /><h3 className="mt-4 text-lg font-semibold">No Documents Found</h3><p className="mt-2 text-sm text-muted-foreground">Click "Upload" to add your first document.</p></div>
+
+                {(isLoadingDocuments || (!documents?.length && !optimisticUploads.length)) && (
+                    <div className="text-center py-12">
+                        <FileText className="mx-auto h-12 w-12 text-muted-foreground" />
+                        <h3 className="mt-4 text-lg font-semibold">{isLoadingDocuments ? 'Loading Documents...' : 'No Documents Found'}</h3>
+                        <p className="mt-2 text-sm text-muted-foreground">
+                            {isLoadingDocuments ? 'Please wait a moment.' : 'Click "Upload" to add your first document.'}
+                        </p>
+                    </div>
                 )}
                 </div>
             </CardContent>
@@ -332,5 +332,3 @@ export default function DocumentsPage() {
     </div>
   );
 }
-
-    
