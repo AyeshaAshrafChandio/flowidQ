@@ -2,7 +2,7 @@
 
 import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
 import { useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import Header from '@/components/header';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -20,20 +20,22 @@ export default function AdminPage() {
 
   const [selectedQueueId, setSelectedQueueId] = useState<string | null>(null);
 
+  const isAdmin = useMemo(() => user?.email === ADMIN_EMAIL, [user]);
+
   const queuesQuery = useMemoFirebase(() => {
-    if (!firestore) return null;
+    if (!firestore || !isAdmin) return null; // Only query if user is admin
     return query(collection(firestore, 'queues'), orderBy('name'));
-  }, [firestore]);
+  }, [firestore, isAdmin]);
   const { data: queues, isLoading: isLoadingQueues } = useCollection(queuesQuery);
   
   const selectedQueueEntriesQuery = useMemoFirebase(() => {
-    if(!firestore || !selectedQueueId) return null;
+    if(!firestore || !selectedQueueId || !isAdmin) return null; // Only query if user is admin
     return query(
       collection(firestore, 'queues', selectedQueueId, 'queueEntries'), 
       where('status', '==', 'waiting'),
       orderBy('ticketNumber')
     );
-  }, [firestore, selectedQueueId]);
+  }, [firestore, selectedQueueId, isAdmin]);
   const { data: queueEntries, isLoading: isLoadingEntries } = useCollection(selectedQueueEntriesQuery);
 
   const selectedQueue = useMemoFirebase(() => {
@@ -91,7 +93,7 @@ export default function AdminPage() {
   };
 
 
-  if (isUserLoading || !user || user.email !== ADMIN_EMAIL) {
+  if (isUserLoading || !user || !isAdmin) {
     return (
       <div className="flex flex-col min-h-screen">
         <Header />
