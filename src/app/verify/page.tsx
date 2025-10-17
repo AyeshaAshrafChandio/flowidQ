@@ -1,7 +1,7 @@
 'use client';
 
 import { useSearchParams } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 import Header from '@/components/header';
 import { getFirestore, doc, getDoc, collection, getDocs, query, where, DocumentData } from 'firebase/firestore';
 import { Loader2, FileText, ShieldCheck, Download } from 'lucide-react';
@@ -19,7 +19,7 @@ interface DocumentWithId extends DocumentData {
     id: string;
 }
 
-export default function VerifyPage() {
+function VerifyComponent() {
     const searchParams = useSearchParams();
     const [documents, setDocuments] = useState<DocumentWithId[]>([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -85,52 +85,61 @@ export default function VerifyPage() {
     }, [searchParams]);
 
     return (
+        <Card className="w-full max-w-2xl glowing-border">
+            <CardHeader className="text-center">
+                <ShieldCheck className="mx-auto h-12 w-12 text-primary" />
+                <CardTitle className="mt-4">Document Verification</CardTitle>
+                <CardDescription>
+                    {isLoading ? "Verifying shared documents..." : (error ? "Verification Failed" : "Documents shared by " + (userInfo?.name || 'user'))}
+                </CardDescription>
+            </CardHeader>
+            <CardContent>
+                {isLoading ? (
+                    <div className="flex justify-center py-12">
+                        <Loader2 className="h-16 w-16 animate-spin text-primary" />
+                    </div>
+                ) : error ? (
+                    <div className="text-center text-red-500 bg-destructive/10 p-4 rounded-md">
+                        <p className="font-semibold">Error</p>
+                        <p>{error}</p>
+                    </div>
+                ) : (
+                    <div className="space-y-4">
+                        {documents.map((doc) => (
+                            <div key={doc.id} className="flex items-center justify-between p-4 rounded-lg bg-secondary/50">
+                                <div className="flex items-center gap-4">
+                                    <FileText className="h-6 w-6 text-primary" />
+                                    <div>
+                                        <p className="font-medium">{doc.name}</p>
+                                        <p className="text-sm text-muted-foreground">
+                                            Uploaded: {new Date(doc.uploadDate.seconds * 1000).toLocaleDateString()}
+                                        </p>
+                                    </div>
+                                </div>
+                                <a href={doc.fileUrl} target="_blank" rel="noopener noreferrer">
+                                  <Button variant="outline" size="sm">
+                                      <Download className="mr-2 h-4 w-4" />
+                                      View
+                                  </Button>
+                                </a>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </CardContent>
+        </Card>
+    );
+}
+
+
+export default function VerifyPage() {
+    return (
         <div className="flex flex-col min-h-screen">
             <Header />
             <main className="flex-grow container mx-auto px-4 sm:px-6 lg:px-8 py-12 flex items-center justify-center">
-                <Card className="w-full max-w-2xl glowing-border">
-                    <CardHeader className="text-center">
-                        <ShieldCheck className="mx-auto h-12 w-12 text-primary" />
-                        <CardTitle className="mt-4">Document Verification</CardTitle>
-                        <CardDescription>
-                            {isLoading ? "Verifying shared documents..." : (error ? "Verification Failed" : "Documents shared by " + (userInfo?.name || 'user'))}
-                        </CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        {isLoading ? (
-                            <div className="flex justify-center py-12">
-                                <Loader2 className="h-16 w-16 animate-spin text-primary" />
-                            </div>
-                        ) : error ? (
-                            <div className="text-center text-red-500 bg-destructive/10 p-4 rounded-md">
-                                <p className="font-semibold">Error</p>
-                                <p>{error}</p>
-                            </div>
-                        ) : (
-                            <div className="space-y-4">
-                                {documents.map((doc) => (
-                                    <div key={doc.id} className="flex items-center justify-between p-4 rounded-lg bg-secondary/50">
-                                        <div className="flex items-center gap-4">
-                                            <FileText className="h-6 w-6 text-primary" />
-                                            <div>
-                                                <p className="font-medium">{doc.name}</p>
-                                                <p className="text-sm text-muted-foreground">
-                                                    Uploaded: {new Date(doc.uploadDate.seconds * 1000).toLocaleDateString()}
-                                                </p>
-                                            </div>
-                                        </div>
-                                        <a href={doc.fileUrl} target="_blank" rel="noopener noreferrer">
-                                          <Button variant="outline" size="sm">
-                                              <Download className="mr-2 h-4 w-4" />
-                                              View
-                                          </Button>
-                                        </a>
-                                    </div>
-                                ))}
-                            </div>
-                        )}
-                    </CardContent>
-                </Card>
+                <Suspense fallback={<div className="flex justify-center py-12"><Loader2 className="h-16 w-16 animate-spin text-primary" /></div>}>
+                    <VerifyComponent />
+                </Suspense>
             </main>
         </div>
     );
