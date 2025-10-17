@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
@@ -97,47 +98,42 @@ export default function DocumentsPage() {
         setSelectedFile(null);
       },
       async () => {
-        // --- This part runs AFTER the file is uploaded ---
-        const toastId = toast.loading('File uploaded! Processing...');
+        const toastId = toast.loading('File uploaded! Saving metadata...');
         try {
           const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
-          const documentsColRef = collection(firestore, 'users', user.uid, 'documents');
-
+          
           const docData = {
             name: file.name,
             fileUrl: downloadURL,
             storagePath: storageRef.fullPath,
             uploadDate: serverTimestamp(),
             category: file.type,
-            isEncrypted: true, 
+            isEncrypted: true,
             userId: user.uid,
           };
-          
-          const docRef = await addDoc(documentsColRef, docData);
-          toast.success('Document saved! AI analysis in background.', { id: toastId });
 
-          // --- Run AI analysis in the background (don't wait for it) ---
+          const docRef = await addDoc(collection(firestore, 'users', user.uid, 'documents'), docData);
+          toast.success('Document appears in list. AI analysis in background.', { id: toastId });
+
           if (file.type.startsWith('image/')) {
             try {
               const dataUri = await fileToDataURI(file);
               const analysisResult = await analyzeDocument({ photoDataUri: dataUri });
-              const aiData = { aiAnalysis: analysisResult };
-              await updateDoc(docRef, aiData); 
+              await updateDoc(docRef, { aiAnalysis: analysisResult });
               toast.success(`AI detected: ${analysisResult.documentType}`);
             } catch (aiError) {
               console.error("AI analysis failed:", aiError);
-              toast.error('AI analysis failed, but your document was saved.');
+              toast.error('AI analysis failed, but the document was saved.');
             }
           }
         } catch (error) {
-            console.error("Error saving document metadata:", error);
-            toast.error('Failed to save document metadata.', { id: toastId });
+          console.error("Error saving document metadata:", error);
+          toast.error('Failed to save document metadata.', { id: toastId });
         } finally {
-            // Reset UI regardless of what happens
-            setIsUploading(false);
-            setUploadProgress(null);
-            setSelectedFile(null);
-            if (fileInputRef.current) fileInputRef.current.value = '';
+          setIsUploading(false);
+          setUploadProgress(null);
+          setSelectedFile(null);
+          if (fileInputRef.current) fileInputRef.current.value = '';
         }
       }
     );
@@ -376,7 +372,7 @@ export default function DocumentsPage() {
                                         <AlertDialogDescription>
                                         This action cannot be undone. This will permanently delete your
                                         document and remove your data from our servers.
-                                        </spline>
+                                        </AlertDialogDescription>
                                     </AlertDialogHeader>
                                     <AlertDialogFooter>
                                         <AlertDialogCancel>Cancel</AlertDialogCancel>
@@ -406,5 +402,3 @@ export default function DocumentsPage() {
     </div>
   );
 }
-
-    
