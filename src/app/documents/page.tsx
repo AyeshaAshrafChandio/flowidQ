@@ -4,7 +4,7 @@
 import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
 import { getStorage, ref, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebase/storage';
 import { useRouter } from 'next/navigation';
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import Header from '@/components/header';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -18,15 +18,13 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { analyzeDocument } from '@/ai/flows/document-analyzer-flow';
 
-type UploadStatus = 'pending' | 'uploading' | 'success' | 'error';
+type UploadStatus = 'uploading' | 'success' | 'error';
 
 interface OptimisticUpload {
   id: string;
   fileName: string;
-  progress: number;
   status: UploadStatus;
   error?: string;
-  file: File;
 }
 
 export default function DocumentsPage() {
@@ -67,9 +65,10 @@ export default function DocumentsPage() {
     if (file) {
       handleUpload(file);
     }
+     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
-  const handleUpload = async (file: File) => {
+  const handleUpload = (file: File) => {
     if (!user || !firestore) {
       toast.error('You must be logged in to upload documents.');
       return;
@@ -83,71 +82,60 @@ export default function DocumentsPage() {
     const newUpload: OptimisticUpload = {
       id: optimisticId,
       fileName: file.name,
-      progress: 0,
       status: 'uploading',
-      file: file,
     };
 
-    // Optimistically add to UI
     setOptimisticUploads(prev => [newUpload, ...prev]);
 
-    try {
-      const storage = getStorage();
-      const storageRef = ref(storage, `documents/${user.uid}/${Date.now()}_${file.name}`);
-      const uploadTask = uploadBytesResumable(storageRef, file);
+    const storage = getStorage();
+    const storageRef = ref(storage, `documents/${user.uid}/${Date.now()}_${file.name}`);
+    const uploadTask = uploadBytesResumable(storageRef, file);
 
-      uploadTask.on('state_changed',
-        (snapshot) => {
-          const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-          setOptimisticUploads(prev => prev.map(up => up.id === optimisticId ? { ...up, progress } : up));
-        },
-        (error) => {
-          console.error("Upload failed:", error);
-          setOptimisticUploads(prev => prev.map(up => up.id === optimisticId ? { ...up, status: 'error', error: 'Upload failed' } : up));
-        },
-        async () => {
-          // Upload complete, now save to Firestore
-          try {
-            const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
-            const docData = {
-              name: file.name,
-              fileUrl: downloadURL,
-              storagePath: storageRef.fullPath,
-              uploadDate: serverTimestamp(),
-              category: file.type,
-              userId: user.uid,
-            };
+    uploadTask.on('state_changed',
+      null, // Not using progress updates
+      (error) => {
+        console.error("Upload failed:", error);
+        toast.error(`Upload of "${file.name}" failed.`);
+        setOptimisticUploads(prev => prev.map(up => up.id === optimisticId ? { ...up, status: 'error', error: 'Upload failed' } : up));
+      },
+      async () => {
+        // Upload complete, now save to Firestore
+        try {
+          const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+          const docData = {
+            name: file.name,
+            fileUrl: downloadURL,
+            storagePath: storageRef.fullPath,
+            uploadDate: serverTimestamp(),
+            category: file.type,
+            userId: user.uid,
+          };
 
-            const docRef = await addDoc(collection(firestore, 'users', user.uid, 'documents'), docData);
-            
-            // Once saved to Firestore, useCollection will pick it up, so we can remove the optimistic one
-            setOptimisticUploads(prev => prev.filter(up => up.id !== optimisticId));
-            toast.success(`"${file.name}" uploaded successfully!`);
+          const docRef = await addDoc(collection(firestore, 'users', user.uid, 'documents'), docData);
+          
+          toast.success(`"${file.name}" uploaded successfully!`);
+          setOptimisticUploads(prev => prev.filter(up => up.id !== optimisticId));
 
-            // AI analysis in the background
-            if (file.type.startsWith('image/')) {
-              fileToDataURI(file).then(dataUri => {
-                analyzeDocument({ photoDataUri: dataUri }).then(analysisResult => {
-                  updateDoc(docRef, { aiAnalysis: analysisResult });
-                  toast.success(`AI analysis complete for "${file.name}"`);
-                }).catch(aiError => {
-                  console.error("AI analysis failed:", aiError);
-                  // Non-blocking error
-                });
+          // AI analysis in the background
+          if (file.type.startsWith('image/')) {
+            toast.loading(`AI is analyzing "${file.name}"...`, { id: 'ai-toast' });
+            fileToDataURI(file).then(dataUri => {
+              analyzeDocument({ photoDataUri: dataUri }).then(analysisResult => {
+                updateDoc(docRef, { aiAnalysis: analysisResult });
+                toast.success(`AI analysis complete for "${file.name}"`, { id: 'ai-toast' });
+              }).catch(aiError => {
+                console.error("AI analysis failed:", aiError);
+                toast.error(`AI analysis failed for "${file.name}"`, { id: 'ai-toast' });
               });
-            }
-          } catch (dbError: any) {
-            console.error("Firestore save failed:", dbError);
-            setOptimisticUploads(prev => prev.map(up => up.id === optimisticId ? { ...up, status: 'error', error: 'Save to database failed' } : up));
+            });
           }
+        } catch (dbError: any) {
+          console.error("Firestore save failed:", dbError);
+          toast.error(`Failed to save "${file.name}"`);
+          setOptimisticUploads(prev => prev.map(up => up.id === optimisticId ? { ...up, status: 'error', error: 'Save to database failed' } : up));
         }
-      );
-    } catch (error) {
-        console.error("Upload initiation failed:", error);
-        setOptimisticUploads(prev => prev.map(up => up.id === optimisticId ? { ...up, status: 'error', error: 'Could not start upload' } : up));
-    } finally {
-        if (fileInputRef.current) fileInputRef.current.value = '';
-    }
+      }
+    );
   };
   
   const handleDelete = async (docId: string, storagePath: string) => {
@@ -266,11 +254,9 @@ export default function DocumentsPage() {
                       <div className="flex-grow">
                           <p className="font-medium">{upload.fileName}</p>
                           {upload.status === 'uploading' && (
-                             <div className="flex items-center gap-2 mt-1">
-                                <div className="relative h-1 w-full overflow-hidden rounded-full bg-background">
-                                  <div className="h-full w-full flex-1 bg-primary transition-all" style={{ transform: `translateX(-${100 - upload.progress}%)` }}/>
-                                </div>
-                                <p className="text-xs text-muted-foreground">{upload.progress.toFixed(0)}%</p>
+                             <div className="flex items-center gap-2 mt-1 text-muted-foreground">
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                                <p className="text-xs">Uploading...</p>
                               </div>
                           )}
                            {upload.status === 'error' && (
