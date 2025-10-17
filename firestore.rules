@@ -1,129 +1,39 @@
-/**
- * @file Firestore Security Rules
- * @description This ruleset enforces a strict user-ownership model for most data,
- *              allowing users to only access their own data, with some exceptions for public read.
- *
- * Data Structure:
- * - /users/{userId}: User profiles, accessible only by the owning user.
- * - /users/{userId}/documents/{documentId}: Documents owned by a user, accessible only by that user.
- * - /users/{userId}/accessLogs/{accessLogId}: Access logs for a user's documents, accessible only by that user.
- * - /queues/{queueId}: Public information about queues, readable by all.
- * - /queues/{queueId}/queueEntries/{queueEntryId}: Queue entries, accessible only if the user owns it.
- *
- * Key Security Decisions:
- * - Users can only list documents and accessLogs that they own.
- * - Queues are publicly readable.
- * - QueueEntries are owner-only accessible
- *
- * Denormalization for Authorization:
- * - The `userId` field is used within the `/users/{userId}/documents/{documentId}` and `/users/{userId}/accessLogs/{accessLogId}` paths to ensure that each document and access log is associated with its owner.
- */
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    /**
-     * @description Secure user profiles. Only the owner can read or write their profile.
-     * @path /databases/{database}/documents/users/{userId}
-     * @allow (create) User with ID 'user123' can create their own profile.
-     * @allow (get) User with ID 'user123' can read their own profile.
-     * @allow (update) User with ID 'user123' can update their own profile.
-     * @allow (delete) User with ID 'user123' can delete their own profile.
-     * @deny (get) User with ID 'user456' cannot read user 'user123' profile.
-     * @deny (create) User with ID 'user456' cannot create user 'user123' profile.
-     * @principle Enforces document ownership for writes.
-     */
+    // Helper function to check if the user is the owner of the data
+    function isOwner(userId) {
+      return request.auth != null && request.auth.uid == userId;
+    }
+    
+    // Helper function to check if the user is an Admin
+    function isAdmin() {
+      return request.auth != null && request.auth.token.email == "admin@flowidq.com";
+    }
+
+    // Users can read and create their own user document
     match /users/{userId} {
-      allow get: if isOwner(userId);
-      allow list: if false; // Listing users is not allowed.
-      allow create: if isOwner(userId);
-      allow update: if isOwner(userId);
-      allow delete: if isOwner(userId);
+      allow read, create: if isOwner(userId);
     }
-
-    /**
-     * @description Secure documents owned by a user. Only the owner can read or write their documents.
-     * @path /databases/{database}/documents/users/{userId}/documents/{documentId}
-     * @allow (create) User with ID 'user123' can create a document in their collection.
-     * @allow (get) User with ID 'user123' can read a document in their collection.
-     * @allow (update) User with ID 'user123' can update a document in their collection.
-     * @allow (delete) User with ID 'user123' can delete a document in their collection.
-     * @deny (get) User with ID 'user456' cannot read document in user 'user123' collection.
-     * @deny (create) User with ID 'user456' cannot create document in user 'user123' collection.
-     * @principle Enforces document ownership for writes.
-     */
+    
+    // Users can manage their own documents
     match /users/{userId}/documents/{documentId} {
-      allow get: if isOwner(userId);
-      allow list: if isOwner(userId);
-      allow create: if isOwner(userId);
-      allow update: if isOwner(userId);
-      allow delete: if isOwner(userId);
+        allow get, list, create, update, delete: if isOwner(userId);
     }
 
-    /**
-     * @description Secure access logs for a user. Only the owner can read or write their access logs.
-     * @path /databases/{database}/documents/users/{userId}/accessLogs/{accessLogId}
-     * @allow (create) User with ID 'user123' can create an access log in their collection.
-     * @allow (get) User with ID 'user123' can read an access log in their collection.
-     * @allow (update) User with ID 'user123' can update an access log in their collection.
-     * @allow (delete) User with ID 'user123' can delete their own access log in their collection.
-     * @deny (get) User with ID 'user456' cannot read access log in user 'user123' collection.
-     * @deny (create) User with ID 'user456' cannot create access log in user 'user123' collection.
-     * @principle Enforces document ownership for writes.
-     */
-    match /users/{userId}/accessLogs/{accessLogId} {
-      allow get: if isOwner(userId);
-      allow list: if isOwner(userId);
-      allow create: if isOwner(userId);
-      allow update: if isOwner(userId);
-      allow delete: if isOwner(userId);
-    }
-
-    /**
-     * @description Make queues publicly readable but not writable.
-     * @path /databases/{database}/documents/queues/{queueId}
-     * @allow (get) Any user can read queue information.
-     * @deny (create) No one can create queues via the client.
-     * @principle Allows public read access to queue information.
-     */
+    // Anyone can read public queue information
     match /queues/{queueId} {
-      allow get: if true;
-      allow list: if true;
-      allow create: if false;
-      allow update: if false;
-      allow delete: if false;
+      allow get, list: if request.auth != null;
+      // Admins and the system can update queue details
+      allow update: if isAdmin();
     }
-
-    /**
-     * @description Secure queue entries. Only the owner can read or write their queue entry.
-     * @path /databases/{database}/documents/queues/{queueId}/queueEntries/{queueEntryId}
-     * @allow (create) User with ID 'user123' can create a queue entry if the userId matches.
-     * @allow (get) User with ID 'user123' can read their own queue entry.
-     * @allow (update) User with ID 'user123' can update their own queue entry.
-     * @allow (delete) User with ID 'user123' can delete their own queue entry.
-     * @deny (get) User with ID 'user456' cannot read user 'user123' queue entry.
-     * @deny (create) User with ID 'user456' cannot create user 'user123' queue entry.
-     * @principle Enforces document ownership for writes.
-     */
-    match /queues/{queueId}/queueEntries/{queueEntryId} {
-      allow get: if isQueueEntryOwner(queueId, queueEntryId);
-      allow list: if isSignedIn();
-      allow create: if isSignedIn();
-      allow update: if isQueueEntryOwner(queueId, queueEntryId);
-      allow delete: if isQueueEntryOwner(queueId, queueEntryId);
+    
+    // Authenticated users can create their own queue entries
+    match /queues/{queueId}/queueEntries/{entryId} {
+        allow create: if request.auth != null;
+        // Admins can read the full list of entries for management
+        allow get, list: if isAdmin();
     }
-  }
-
-  // Helper functions
-  function isSignedIn() {
-    return request.auth != null;
-  }
-
-  function isOwner(userId) {
-    return request.auth.uid == userId;
-  }
-
-  function isQueueEntryOwner(queueId, queueEntryId) {
-    return get(/databases/$(database)/documents/queues/$(queueId)/queueEntries/$(queueEntryId)).data.userId == request.auth.uid;
   }
 }

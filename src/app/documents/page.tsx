@@ -8,7 +8,7 @@ import { useEffect, useState, useRef } from 'react';
 import Header from '@/components/header';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Upload, FileText, Trash2, Loader2, QrCode, X, FileEdit, Save, ShieldCheck } from 'lucide-react';
+import { Upload, FileText, Trash2, Loader2, QrCode, X, FileEdit, Save } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from "@/components/ui/checkbox";
 import { collection, query, orderBy, serverTimestamp, deleteDoc, doc, addDoc, updateDoc } from 'firebase/firestore';
@@ -93,7 +93,7 @@ export default function DocumentsPage() {
       },
       (error) => {
         console.error("Upload failed:", error);
-        toast.error('Upload failed. Please try again.');
+        toast.error(`Upload failed: ${error.message}`);
         setIsUploading(false);
         setUploadProgress(null);
         setSelectedFile(null);
@@ -102,7 +102,7 @@ export default function DocumentsPage() {
         }
       },
       async () => {
-        // Upload completed successfully, now create Firestore record.
+        // Upload completed successfully, now process the document
         const toastId = toast.loading('Processing document...');
         try {
           const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
@@ -165,6 +165,7 @@ export default function DocumentsPage() {
               toast.dismiss(toastId);
             }
         } finally {
+            // This block guarantees the UI is reset
             setIsUploading(false);
             setUploadProgress(null);
             setSelectedFile(null);
@@ -354,8 +355,8 @@ export default function DocumentsPage() {
           </div>
         )}
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            <Card className="glowing-border md:col-span-1">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            <Card className="glowing-border md:col-span-3">
                 <CardHeader>
                     <CardTitle>Your Documents</CardTitle>
                     <CardDescription>
@@ -449,22 +450,6 @@ export default function DocumentsPage() {
                         </div>
                         )
                     )}
-                    </div>
-                </CardContent>
-            </Card>
-
-            <Card className="glowing-border md:col-span-1">
-                <CardHeader>
-                    <CardTitle>Access History</CardTitle>
-                    <CardDescription>
-                    Track who has accessed your shared documents.
-                    </CardDescription>
-                </CardHeader>
-                <CardContent>
-                    <div className="text-center py-12">
-                        <ShieldCheck className="mx-auto h-12 w-12 text-muted-foreground" />
-                        <h3 className="mt-4 text-lg font-semibold">No Access History</h3>
-                        <p className="mt-2 text-sm text-muted-foreground">This feature is coming soon. You'll be able to see who accessed your files here.</p>
                     </div>
                 </CardContent>
             </Card>
