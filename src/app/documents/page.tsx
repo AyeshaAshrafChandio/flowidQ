@@ -101,7 +101,8 @@ export default function DocumentsPage() {
         setOptimisticUploads(prev => prev.map(up => up.id === optimisticId ? { ...up, status: 'error', error: 'Upload to storage failed' } : up));
       },
       () => {
-        // This is the success callback.
+        // This is the success callback for the upload itself.
+        // Now we get the URL and save to Firestore.
         setOptimisticUploads(prev => prev.map(up => up.id === optimisticId ? { ...up, status: 'processing' } : up));
         
         getDownloadURL(uploadTask.snapshot.ref).then(async (downloadURL) => {
@@ -118,12 +119,14 @@ export default function DocumentsPage() {
               const docRef = await addDoc(collection(firestore, 'users', user.uid, 'documents'), docData);
               toast.success(`"${file.name}" uploaded successfully!`);
 
-              // Run AI analysis in the background, not blocking the UI
+              // AI analysis now runs completely in the background and does not block UI.
               if (file.type.startsWith('image/')) {
                   fileToDataURI(file).then(dataUri => {
                       analyzeDocument({ photoDataUri: dataUri }).then(analysisResult => {
+                          // Silently update the doc with AI data in the background.
                           updateDoc(docRef, { aiAnalysis: analysisResult });
                       }).catch(aiError => {
+                          // Log AI errors but don't bother the user with a toast.
                           console.error("AI analysis failed in background:", aiError);
                       });
                   });
@@ -134,7 +137,7 @@ export default function DocumentsPage() {
               toast.error(`Failed to save "${file.name}"`);
               setOptimisticUploads(prev => prev.map(up => up.id === optimisticId ? { ...up, status: 'error', error: 'Save to database failed' } : up));
             } finally {
-               // Remove from optimistic list after db operation is done
+               // Remove from optimistic list after db operation is complete (success or fail)
                setOptimisticUploads(prev => prev.filter(up => up.id !== optimisticId));
             }
 
@@ -345,3 +348,5 @@ export default function DocumentsPage() {
     </div>
   );
 }
+
+    
