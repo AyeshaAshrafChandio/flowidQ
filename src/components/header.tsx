@@ -40,9 +40,6 @@ export default function Header() {
                <Link href="/queues">
                 <Button variant="ghost">Queues</Button>
               </Link>
-              <Link href="/records">
-                <Button variant="ghost">Records</Button>
-              </Link>
               {user.email === ADMIN_EMAIL && (
                  <Link href="/admin">
                     <Button variant="ghost" className="text-primary hover:text-primary/90">
