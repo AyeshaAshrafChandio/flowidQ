@@ -74,8 +74,6 @@ export default function DocumentsPage() {
       return;
     }
 
-    // Disable button briefly, but don't show a loading state
-    setIsUploadButtonDisabled(true);
     const toastId = toast.loading(`Uploading "${file.name}"...`);
 
     try {
@@ -105,6 +103,7 @@ export default function DocumentsPage() {
                     updateDoc(docRef, { aiAnalysis: analysisResult });
                 }).catch(aiError => {
                     console.warn("Background AI analysis failed:", aiError);
+                    // Don't show a user-facing error for this, as it's a background enhancement
                 });
             });
         }
@@ -112,9 +111,6 @@ export default function DocumentsPage() {
     } catch (error) {
         console.error("Upload failed:", error);
         toast.error(`Upload of "${file.name}" failed.`, { id: toastId });
-    } finally {
-        // Re-enable the button after a short delay
-        setTimeout(() => setIsUploadButtonDisabled(false), 1000);
     }
   };
   
@@ -294,5 +290,4 @@ export default function DocumentsPage() {
       </Dialog>
     </div>
   );
-
-    
+}
