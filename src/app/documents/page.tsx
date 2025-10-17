@@ -18,13 +18,10 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { analyzeDocument } from '@/ai/flows/document-analyzer-flow';
 
-type UploadStatus = 'uploading' | 'success' | 'error';
-
+// This represents a file that is being uploaded. It's used for the optimistic UI.
 interface OptimisticUpload {
-  id: string;
-  fileName: string;
-  status: UploadStatus;
-  error?: string;
+  id: string; // A temporary, unique ID
+  file: File;
 }
 
 export default function DocumentsPage() {
@@ -33,6 +30,7 @@ export default function DocumentsPage() {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // State for uploads that are in progress.
   const [optimisticUploads, setOptimisticUploads] = useState<OptimisticUpload[]>([]);
   const [selectedDocs, setSelectedDocs] = useState<string[]>([]);
   const [editingDoc, setEditingDoc] = useState<{ id: string, name: string } | null>(null);
@@ -65,12 +63,13 @@ export default function DocumentsPage() {
     if (file) {
       handleUpload(file);
     }
-     // Reset the file input so the user can upload the same file again
-     if (fileInputRef.current) {
+    // Reset the file input so the user can upload the same file again
+    if (fileInputRef.current) {
         fileInputRef.current.value = '';
-     }
+    }
   };
 
+  // This is the core function for instant uploads.
   const handleUpload = (file: File) => {
     if (!user || !firestore) {
       toast.error('You must be logged in to upload documents.');
@@ -82,14 +81,12 @@ export default function DocumentsPage() {
     }
 
     const optimisticId = `optimistic-${Date.now()}`;
-    const newUpload: OptimisticUpload = {
-      id: optimisticId,
-      fileName: file.name,
-      status: 'uploading',
-    };
-    
+    const newUpload: OptimisticUpload = { id: optimisticId, file };
+
+    // 1. INSTANTLY add the file to the UI.
     setOptimisticUploads(prev => [newUpload, ...prev]);
 
+    // 2. Start the actual upload process in the background.
     const performUpload = async () => {
         try {
             const storage = getStorage();
@@ -106,9 +103,15 @@ export default function DocumentsPage() {
               category: file.type,
               userId: user.uid,
             };
+
+            // Save to Firestore. This will trigger the useCollection hook to update the UI.
             const docRef = await addDoc(collection(firestore, 'users', user.uid, 'documents'), docData);
+
+            // 3. Once saved, remove the optimistic upload placeholder.
+            // The real document will now be displayed by the useCollection hook.
+            setOptimisticUploads(prev => prev.filter(up => up.id !== optimisticId));
             
-            // AI analysis runs silently in the background
+            // AI analysis runs silently in the background without blocking the UI.
             if (file.type.startsWith('image/')) {
                 fileToDataURI(file).then(dataUri => {
                     analyzeDocument({ photoDataUri: dataUri }).then(analysisResult => {
@@ -119,12 +122,11 @@ export default function DocumentsPage() {
                 });
             }
 
-            setOptimisticUploads(prev => prev.filter(up => up.id !== optimisticId));
-
         } catch (error) {
             console.error("Upload failed:", error);
             toast.error(`Upload of "${file.name}" failed.`);
-            setOptimisticUploads(prev => prev.map(up => up.id === optimisticId ? { ...up, status: 'error', error: 'Upload failed' } : up));
+            // If upload fails, remove the optimistic placeholder.
+            setOptimisticUploads(prev => prev.filter(up => up.id !== optimisticId));
         }
     };
     
@@ -240,33 +242,21 @@ export default function DocumentsPage() {
             <CardContent>
                 <div className="space-y-4">
                 
+                {/* Render optimistic uploads instantly */}
                 {optimisticUploads.map(upload => (
-                  <div key={upload.id} className="flex items-center justify-between p-3 rounded-lg bg-secondary/50">
+                  <div key={upload.id} className="flex items-center justify-between p-3 rounded-lg bg-secondary/50 opacity-50">
                     <div className="flex items-center gap-4 flex-grow">
                       <FileText className="h-6 w-6 text-primary" />
-                      <div className="flex-grow">
-                          <p className="font-medium">{upload.fileName}</p>
-                           {upload.status === 'error' ? (
-                              <div className="flex items-center gap-2 mt-1 text-red-500">
-                                <AlertCircle className="h-4 w-4" />
-                                <p className="text-xs font-medium">{upload.error}</p>
-                              </div>
-                           ) : (
-                             <div className="flex items-center gap-2 mt-1">
-                                <Loader2 className="h-4 w-4 animate-spin text-primary/80" />
-                                <p className="text-xs text-muted-foreground">Uploading...</p>
-                             </div>
-                           )}
+                      <div>
+                          <p className="font-medium">{upload.file.name}</p>
+                          <p className="text-xs text-muted-foreground">Uploading now...</p>
                       </div>
                     </div>
-                    {upload.status === 'error' && (
-                     <Button variant="ghost" size="icon" onClick={() => setOptimisticUploads(p => p.filter(up => up.id !== upload.id))}>
-                        <X className="h-4 w-4 text-red-500" />
-                     </Button>
-                    )}
+                    <Loader2 className="h-5 w-5 animate-spin text-primary" />
                   </div>
                 ))}
                 
+                {/* Render real documents from Firestore */}
                 {documents && documents.map((doc) => (
                     <div key={doc.id} className="flex items-center justify-between p-3 rounded-lg bg-secondary/50 hover:bg-secondary/70 transition-colors">
                         <div className="flex items-center gap-4 flex-grow">
@@ -332,6 +322,5 @@ export default function DocumentsPage() {
       </Dialog>
     </div>
   );
-}
 
     
