@@ -23,8 +23,7 @@ export default function DocumentsPage() {
   const { user, isUserLoading } = useUser();
   const router = useRouter();
   const firestore = useFirestore();
-  const storage = getStorage();
-
+  
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -73,8 +72,11 @@ export default function DocumentsPage() {
   };
   
   const handleUpload = (file: File) => {
+    // **FIX**: Get storage instance here to ensure it's available.
+    const storage = getStorage();
+
     if (!user || !firestore || !storage) {
-      toast.error('You must be logged in to upload documents.');
+      toast.error('You must be logged in to upload documents. Please refresh and try again.');
       return;
     }
 
@@ -142,6 +144,7 @@ export default function DocumentsPage() {
   const handleDelete = async (docId: string, storagePath: string) => {
     if (!user || !firestore) return;
     
+    const storage = getStorage();
     const docRef = doc(firestore, 'users', user.uid, 'documents', docId);
     const storageRef = ref(storage, storagePath);
 
@@ -353,9 +356,13 @@ export default function DocumentsPage() {
                                 </>
                             ) : (
                                 <>
-                                <Button variant="ghost" size="icon" onClick={() => handleGenerateQrForSingle(doc)} disabled={!!editingDocId}>
-                                    <QrCode className="h-4 w-4" />
-                                </Button>
+                                <Dialog>
+                                    <DialogTrigger asChild>
+                                        <Button variant="ghost" size="icon" onClick={() => handleGenerateQrForSingle(doc)} disabled={!!editingDocId}>
+                                            <QrCode className="h-4 w-4" />
+                                        </Button>
+                                    </DialogTrigger>
+                                </Dialog>
 
                                 <Button variant="ghost" size="icon" onClick={() => handleEdit(doc)} disabled={!!editingDocId}>
                                     <FileEdit className="h-4 w-4" />
@@ -402,3 +409,5 @@ export default function DocumentsPage() {
     </div>
   );
 }
+
+    
