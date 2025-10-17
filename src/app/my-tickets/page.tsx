@@ -6,10 +6,11 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useMemo } from 'react';
 import Header from '@/components/header';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, Ticket, Users, Hash } from 'lucide-react';
+import { Loader2, Ticket, Users, Hash, AlertTriangle } from 'lucide-react';
 import { collection, query, where, collectionGroup } from 'firebase/firestore';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 export default function MyTicketsPage() {
   const { user, isUserLoading } = useUser();
@@ -25,14 +26,14 @@ export default function MyTicketsPage() {
       where('status', '==', 'waiting')
     );
   }, [firestore, user]);
-  const { data: queueEntries, isLoading: isLoadingEntries } = useCollection(userQueueEntriesQuery);
+  const { data: queueEntries, isLoading: isLoadingEntries, error: entriesError } = useCollection(userQueueEntriesQuery);
   
   // Get all queues to enrich the ticket data
   const allQueuesQuery = useMemoFirebase(() => {
     if(!firestore) return null;
     return query(collection(firestore, 'queues'));
   }, [firestore]);
-  const { data: allQueues, isLoading: isLoadingQueues } = useCollection(allQueuesQuery);
+  const { data: allQueues, isLoading: isLoadingQueues, error: queuesError } = useCollection(allQueuesQuery);
   
   // Combine the user's tickets with the details of the queue they belong to
   const enrichedEntries = useMemo(() => {
@@ -70,6 +71,7 @@ export default function MyTicketsPage() {
   }
 
   const isLoading = isLoadingEntries || isLoadingQueues;
+  const dataFetchError = entriesError || queuesError;
 
   return (
     <div className="flex flex-col min-h-screen">
@@ -85,7 +87,17 @@ export default function MyTicketsPage() {
           </div>
         )}
 
-        {!isLoading && enrichedEntries && enrichedEntries.length > 0 ? (
+        {!isLoading && dataFetchError && (
+          <Alert variant="destructive" className="glowing-border">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertTitle>Error Loading Tickets</AlertTitle>
+            <AlertDescription>
+              There was a problem loading your ticket information. Please try again later or contact the owner for assistance.
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {!isLoading && !dataFetchError && enrichedEntries && enrichedEntries.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {enrichedEntries.map((entry) => {
                 const peopleAhead = Math.max(0, entry.ticketNumber - (entry.currentNumber || 0) - 1);
@@ -116,7 +128,7 @@ export default function MyTicketsPage() {
             })}
           </div>
         ) : (
-          !isLoading && (
+          !isLoading && !dataFetchError && (
             <div className="text-center py-16 border-2 border-dashed border-secondary rounded-lg">
               <Ticket className="mx-auto h-16 w-16 text-muted-foreground" />
               <h3 className="mt-6 text-xl font-semibold">You have no active tickets.</h3>
@@ -131,5 +143,3 @@ export default function MyTicketsPage() {
     </div>
   );
 }
-
-    
