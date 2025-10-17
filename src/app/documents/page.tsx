@@ -4,11 +4,11 @@
 import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
 import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { useRouter } from 'next/navigation';
-import { useEffect, useState, useRef, useCallback } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import Header from '@/components/header';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Upload, FileText, Trash2, Loader2, QrCode, X, FileEdit, Save, AlertCircle } from 'lucide-react';
+import { Upload, FileText, Trash2, Loader2, QrCode, X, FileEdit, Save } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from "@/components/ui/checkbox";
 import { collection, query, orderBy, serverTimestamp, deleteDoc, doc, addDoc, updateDoc } from 'firebase/firestore';
@@ -55,7 +55,6 @@ export default function DocumentsPage() {
     if (files && files.length > 0) {
         handleUpload(files[0]);
     }
-    // Reset the file input so the user can upload the same file again
     if (fileInputRef.current) {
         fileInputRef.current.value = '';
     }
@@ -93,14 +92,12 @@ export default function DocumentsPage() {
         
         toast.success(`"${file.name}" uploaded successfully.`, { id: toastId });
 
-        // AI analysis runs silently in the background without blocking the UI.
         if (file.type.startsWith('image/')) {
             fileToDataURI(file).then(dataUri => {
                 analyzeDocument({ photoDataUri: dataUri }).then(analysisResult => {
                     updateDoc(docRef, { aiAnalysis: analysisResult });
                 }).catch(aiError => {
                     console.warn("Background AI analysis failed:", aiError);
-                    // Don't show a user-facing error for this, as it's a background enhancement
                 });
             });
         }

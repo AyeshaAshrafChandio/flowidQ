@@ -3,7 +3,7 @@
 
 import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
 import { useRouter } from 'next/navigation';
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Header from '@/components/header';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Loader2, FileText, Clock, ShieldAlert, History } from 'lucide-react';
@@ -33,8 +33,6 @@ export default function RecordsPage() {
   const enrichedLogs = useMemo(() => {
     if (!accessLogs || !firestore || !user) return accessLogs;
 
-    // This is an async operation inside a memo, which isn't ideal for real-time updates.
-    // For this app, we'll fetch the names once when logs load.
     const fetchDocNames = async (log: WithId<AccessLog>) => {
       try {
         const names = await Promise.all(
@@ -50,13 +48,10 @@ export default function RecordsPage() {
       }
     };
 
-    // We can't await here, so we're returning the promise-wrapped logs
-    // and handling the resolution in the component. This is a simplification.
-    // A more robust solution might use a state that gets updated once promises resolve.
     return Promise.all(accessLogs.map(fetchDocNames));
   }, [accessLogs, firestore, user]);
 
-  const [resolvedLogs, setResolvedLogs] = React.useState<WithId<AccessLog>[] | null>(null);
+  const [resolvedLogs, setResolvedLogs] = useState<WithId<AccessLog>[] | null>(null);
 
   useEffect(() => {
     if (enrichedLogs instanceof Promise) {
