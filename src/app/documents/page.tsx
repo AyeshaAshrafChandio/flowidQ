@@ -4,7 +4,7 @@
 import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
 import { getStorage, ref, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebase/storage';
 import { useRouter } from 'next/navigation';
-import { useEffect, useState, useRef, useCallback } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import Header from '@/components/header';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -18,7 +18,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { analyzeDocument } from '@/ai/flows/document-analyzer-flow';
 
-type UploadStatus = 'uploading' | 'success' | 'error';
+type UploadStatus = 'uploading' | 'processing' | 'success' | 'error';
 
 interface OptimisticUpload {
   id: string;
@@ -92,15 +92,17 @@ export default function DocumentsPage() {
     const uploadTask = uploadBytesResumable(storageRef, file);
 
     uploadTask.on('state_changed',
-      null,
+      null, // not using progress snapshots
       (error) => {
         console.error("Upload failed:", error);
         toast.error(`Upload of "${file.name}" failed.`);
-        setOptimisticUploads(prev => prev.map(up => up.id === optimisticId ? { ...up, status: 'error', error: 'Upload failed' } : up));
+        setOptimisticUploads(prev => prev.map(up => up.id === optimisticId ? { ...up, status: 'error', error: 'Upload to storage failed' } : up));
       },
       async () => {
         try {
+          setOptimisticUploads(prev => prev.map(up => up.id === optimisticId ? { ...up, status: 'processing' } : up));
           const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+          
           const docData = {
             name: file.name,
             fileUrl: downloadURL,
@@ -113,15 +115,17 @@ export default function DocumentsPage() {
           const docRef = await addDoc(collection(firestore, 'users', user.uid, 'documents'), docData);
           
           setOptimisticUploads(prev => prev.filter(up => up.id !== optimisticId));
+          toast.success(`"${file.name}" uploaded successfully!`);
 
           if (file.type.startsWith('image/')) {
-            fileToDataURI(file).then(dataUri => {
-              analyzeDocument({ photoDataUri: dataUri }).then(analysisResult => {
-                updateDoc(docRef, { aiAnalysis: analysisResult });
-              }).catch(aiError => {
+             try {
+                const dataUri = await fileToDataURI(file);
+                const analysisResult = await analyzeDocument({ photoDataUri: dataUri });
+                await updateDoc(docRef, { aiAnalysis: analysisResult });
+             } catch (aiError) {
                 console.error("AI analysis failed:", aiError);
-              });
-            });
+                // Non-blocking, so we just log the error and don't show a toast
+             }
           }
         } catch (dbError: any) {
           console.error("Firestore save failed:", dbError);
@@ -246,12 +250,10 @@ export default function DocumentsPage() {
                       <FileText className="h-6 w-6 text-primary" />
                       <div className="flex-grow">
                           <p className="font-medium">{upload.fileName}</p>
-                          {upload.status === 'uploading' && (
-                             <div className="flex items-center gap-2 mt-1 text-muted-foreground">
-                                <Loader2 className="h-4 w-4 animate-spin" />
-                                <p className="text-xs">Uploading...</p>
-                              </div>
-                          )}
+                          <div className="flex items-center gap-2 mt-1 text-muted-foreground">
+                            {(upload.status === 'uploading' || upload.status === 'processing') && <Loader2 className="h-4 w-4 animate-spin" />}
+                            <p className="text-xs">{upload.status === 'uploading' ? 'Uploading...' : 'Processing...'}</p>
+                          </div>
                            {upload.status === 'error' && (
                               <div className="flex items-center gap-2 mt-1 text-red-500">
                                 <AlertCircle className="h-4 w-4" />
@@ -303,12 +305,12 @@ export default function DocumentsPage() {
                     </div>
                 ))}
 
-                {(isLoadingDocuments || (!documents?.length && !optimisticUploads.length)) && (
+                {!isLoadingDocuments && !documents?.length && !optimisticUploads.length && (
                     <div className="text-center py-12">
                         <FileText className="mx-auto h-12 w-12 text-muted-foreground" />
-                        <h3 className="mt-4 text-lg font-semibold">{isLoadingDocuments ? 'Loading Documents...' : 'No Documents Found'}</h3>
+                        <h3 className="mt-4 text-lg font-semibold">No Documents Found</h3>
                         <p className="mt-2 text-sm text-muted-foreground">
-                            {isLoadingDocuments ? 'Please wait a moment.' : 'Click "Upload" to add your first document.'}
+                            Click "Upload" to add your first document.
                         </p>
                     </div>
                 )}
@@ -332,3 +334,5 @@ export default function DocumentsPage() {
     </div>
   );
 }
+
+    
