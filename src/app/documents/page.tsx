@@ -18,24 +18,16 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { analyzeDocument } from '@/ai/flows/document-analyzer-flow';
 
-// This represents a file that is being uploaded. It's used for the optimistic UI.
-interface OptimisticUpload {
-  id: string; // A temporary, unique ID
-  file: File;
-  error?: string;
-}
-
 export default function DocumentsPage() {
   const { user, isUserLoading } = useUser();
   const firestore = useFirestore();
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // State for uploads that are in progress.
-  const [optimisticUploads, setOptimisticUploads] = useState<OptimisticUpload[]>([]);
   const [selectedDocs, setSelectedDocs] = useState<string[]>([]);
   const [editingDoc, setEditingDoc] = useState<{ id: string, name: string } | null>(null);
   const [qrDialogData, setQrDialogData] = useState<{ value: string; name: string } | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
 
   const documentsQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
@@ -61,10 +53,8 @@ export default function DocumentsPage() {
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
-    if (files) {
-      for(const file of Array.from(files)) {
-        handleUpload(file);
-      }
+    if (files && files.length > 0) {
+        handleUpload(files[0]);
     }
     // Reset the file input so the user can upload the same file again
     if (fileInputRef.current) {
@@ -72,8 +62,7 @@ export default function DocumentsPage() {
     }
   };
 
-  // This is the core function for instant uploads.
-  const handleUpload = (file: File) => {
+  const handleUpload = async (file: File) => {
     if (!user || !firestore) {
       toast.error('You must be logged in to upload documents.');
       return;
@@ -83,57 +72,47 @@ export default function DocumentsPage() {
       return;
     }
 
-    const optimisticId = `optimistic-${Date.now()}`;
-    const newUpload: OptimisticUpload = { id: optimisticId, file };
+    setIsUploading(true);
+    const toastId = toast.loading(`Uploading "${file.name}"...`);
 
-    // 1. INSTANTLY add the file to the UI.
-    setOptimisticUploads(prev => [newUpload, ...prev]);
+    try {
+        const storage = getStorage();
+        const storageRef = ref(storage, `documents/${user.uid}/${Date.now()}_${file.name}`);
+        
+        await uploadBytes(storageRef, file);
+        const downloadURL = await getDownloadURL(storageRef);
+        
+        const docData = {
+          name: file.name,
+          fileUrl: downloadURL,
+          storagePath: storageRef.fullPath,
+          uploadDate: serverTimestamp(),
+          category: file.type,
+          userId: user.uid,
+        };
 
-    // 2. Start the actual upload process in the background.
-    const performUpload = async () => {
-        try {
-            const storage = getStorage();
-            const storageRef = ref(storage, `documents/${user.uid}/${Date.now()}_${file.name}`);
-            
-            await uploadBytes(storageRef, file);
-            const downloadURL = await getDownloadURL(storageRef);
-            
-            const docData = {
-              name: file.name,
-              fileUrl: downloadURL,
-              storagePath: storageRef.fullPath,
-              uploadDate: serverTimestamp(),
-              category: file.type,
-              userId: user.uid,
-            };
+        const docRef = await addDoc(collection(firestore, 'users', user.uid, 'documents'), docData);
+        
+        toast.success(`"${file.name}" uploaded successfully.`, { id: toastId });
 
-            // Save to Firestore. This will trigger the useCollection hook to update the UI.
-            const docRef = await addDoc(collection(firestore, 'users', user.uid, 'documents'), docData);
-
-            // 3. Once saved, remove the optimistic upload placeholder.
-            // The real document will now be displayed by the useCollection hook.
-            setOptimisticUploads(prev => prev.filter(up => up.id !== optimisticId));
-            
-            // AI analysis runs silently in the background without blocking the UI.
-            if (file.type.startsWith('image/')) {
-                fileToDataURI(file).then(dataUri => {
-                    analyzeDocument({ photoDataUri: dataUri }).then(analysisResult => {
-                        updateDoc(docRef, { aiAnalysis: analysisResult });
-                    }).catch(aiError => {
-                        console.warn("Background AI analysis failed:", aiError);
-                    });
+        // AI analysis runs silently in the background without blocking the UI.
+        if (file.type.startsWith('image/')) {
+            fileToDataURI(file).then(dataUri => {
+                analyzeDocument({ photoDataUri: dataUri }).then(analysisResult => {
+                    updateDoc(docRef, { aiAnalysis: analysisResult });
+                }).catch(aiError => {
+                    console.warn("Background AI analysis failed:", aiError);
+                    // Do not show a toast for this, it's a non-critical background task
                 });
-            }
-
-        } catch (error) {
-            console.error("Upload failed:", error);
-            toast.error(`Upload of "${file.name}" failed.`);
-            // If upload fails, remove the optimistic placeholder.
-            setOptimisticUploads(prev => prev.filter(up => up.id !== optimisticId));
+            });
         }
-    };
-    
-    performUpload();
+
+    } catch (error) {
+        console.error("Upload failed:", error);
+        toast.error(`Upload of "${file.name}" failed.`, { id: toastId });
+    } finally {
+        setIsUploading(false);
+    }
   };
   
   const handleDelete = async (docId: string, storagePath: string) => {
@@ -145,8 +124,8 @@ export default function DocumentsPage() {
       const docRef = doc(firestore, 'users', user.uid, 'documents', docId);
       const storageRef = ref(storage, storagePath);
       
-      await deleteDoc(docRef);
       await deleteObject(storageRef);
+      await deleteDoc(docRef);
 
       toast.success('Document deleted.', { id: toastId });
       setSelectedDocs(prev => prev.filter(id => id !== docId));
@@ -229,12 +208,12 @@ export default function DocumentsPage() {
                 <QrCode className="mr-2 h-4 w-4" />
                 Share Selected ({selectedDocs.length})
               </Button>
-            <Button onClick={() => fileInputRef.current?.click()}>
-              <Upload className="mr-2 h-4 w-4" />
-              Upload
+            <Button onClick={() => fileInputRef.current?.click()} disabled={isUploading}>
+              {isUploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
+              {isUploading ? 'Uploading...' : 'Upload'}
             </Button>
           </div>
-          <Input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept="image/*,.pdf,.doc,.docx" multiple />
+          <Input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept="image/*,.pdf,.doc,.docx" />
         </div>
 
         <Card className="glowing-border">
@@ -245,22 +224,14 @@ export default function DocumentsPage() {
             <CardContent>
                 <div className="space-y-4">
                 
-                {/* Render optimistic uploads instantly */}
-                {optimisticUploads.map(upload => (
-                  <div key={upload.id} className="flex items-center justify-between p-3 rounded-lg bg-secondary/50">
-                    <div className="flex items-center gap-4 flex-grow">
-                      <FileText className="h-6 w-6 text-primary" />
-                      <div>
-                          <p className="font-medium">{upload.file.name}</p>
-                          <p className="text-xs text-muted-foreground">Uploading...</p>
-                      </div>
+                {isLoadingDocuments && (
+                     <div className="text-center py-12">
+                        <Loader2 className="mx-auto h-12 w-12 animate-spin text-muted-foreground" />
+                        <h3 className="mt-4 text-lg font-semibold">Loading Documents...</h3>
                     </div>
-                    <Loader2 className="h-5 w-5 animate-spin text-primary" />
-                  </div>
-                ))}
+                )}
                 
-                {/* Render real documents from Firestore */}
-                {documents && documents.map((doc) => (
+                {!isLoadingDocuments && documents && documents.map((doc) => (
                     <div key={doc.id} className="flex items-center justify-between p-3 rounded-lg bg-secondary/50 hover:bg-secondary/70 transition-colors">
                         <div className="flex items-center gap-4 flex-grow">
                         <Checkbox id={`select-${doc.id}`} checked={selectedDocs.includes(doc.id)} onCheckedChange={() => setSelectedDocs(p => p.includes(doc.id) ? p.filter(id => id !== doc.id) : [...p, doc.id])} disabled={!!editingDoc} />
@@ -297,7 +268,7 @@ export default function DocumentsPage() {
                     </div>
                 ))}
 
-                {!isLoadingDocuments && !documents?.length && !optimisticUploads.length && (
+                {!isLoadingDocuments && !documents?.length && (
                     <div className="text-center py-12">
                         <FileText className="mx-auto h-12 w-12 text-muted-foreground" />
                         <h3 className="mt-4 text-lg font-semibold">No Documents Found</h3>
