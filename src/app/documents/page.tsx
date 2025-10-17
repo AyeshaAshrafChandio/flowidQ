@@ -29,7 +29,6 @@ export default function DocumentsPage() {
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [selectedDocs, setSelectedDocs] = useState<string[]>([]);
-  const [generatedQrValue, setGeneratedQrValue] = useState<string | null>(null);
   const [editingDocId, setEditingDocId] = useState<string | null>(null);
   const [editingDocName, setEditingDocName] = useState('');
   const [qrDialogData, setQrDialogData] = useState<{ value: string; name: string } | null>(null);
@@ -73,7 +72,7 @@ export default function DocumentsPage() {
   };
   
   const handleUpload = (file: File) => {
-    if (!user || !firestore) {
+    if (!user || !firestore || !storage) {
       toast.error('You must be logged in to upload documents.');
       return;
     }
@@ -81,7 +80,7 @@ export default function DocumentsPage() {
     setIsUploading(true);
     setUploadProgress(0);
     setSelectedFile(file);
-
+    
     const storageRef = ref(storage, `documents/${user.uid}/${Date.now()}_${file.name}`);
     const uploadTask = uploadBytesResumable(storageRef, file);
 
@@ -96,13 +95,10 @@ export default function DocumentsPage() {
         setIsUploading(false);
         setUploadProgress(null);
         setSelectedFile(null);
-        if (fileInputRef.current) {
-          fileInputRef.current.value = '';
-        }
       },
       async () => {
         // --- This part runs AFTER the file is uploaded ---
-        const toastId = toast.loading('Finalizing document...');
+        const toastId = toast.loading('File uploaded! Processing...');
         try {
           const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
           const documentsColRef = collection(firestore, 'users', user.uid, 'documents');
@@ -113,37 +109,31 @@ export default function DocumentsPage() {
             storagePath: storageRef.fullPath,
             uploadDate: serverTimestamp(),
             category: file.type,
-            isEncrypted: true,
+            isEncrypted: true, 
             userId: user.uid,
           };
           
-          // Add document to Firestore immediately
           const docRef = await addDoc(documentsColRef, docData);
-          toast.success('Document uploaded! AI analysis running in background.', { id: toastId });
-
-          // Reset UI immediately for a faster feel
-          setIsUploading(false);
-          setUploadProgress(null);
-          setSelectedFile(null);
-          if (fileInputRef.current) fileInputRef.current.value = '';
+          toast.success('Document saved! AI analysis in background.', { id: toastId });
 
           // --- Run AI analysis in the background (don't wait for it) ---
           if (file.type.startsWith('image/')) {
-            fileToDataURI(file).then(dataUri => {
-                analyzeDocument({ photoDataUri: dataUri }).then(analysisResult => {
-                    const aiData = { aiAnalysis: analysisResult };
-                    updateDoc(docRef, aiData); // Update doc in background
-                    toast.success(`AI detected: ${analysisResult.documentType}`);
-                }).catch(aiError => {
-                    console.error("AI analysis failed:", aiError);
-                    toast.error('AI analysis failed, but your document was saved.');
-                });
-            });
+            try {
+              const dataUri = await fileToDataURI(file);
+              const analysisResult = await analyzeDocument({ photoDataUri: dataUri });
+              const aiData = { aiAnalysis: analysisResult };
+              await updateDoc(docRef, aiData); 
+              toast.success(`AI detected: ${analysisResult.documentType}`);
+            } catch (aiError) {
+              console.error("AI analysis failed:", aiError);
+              toast.error('AI analysis failed, but your document was saved.');
+            }
           }
         } catch (error) {
             console.error("Error saving document metadata:", error);
             toast.error('Failed to save document metadata.', { id: toastId });
-            // Ensure UI is reset even if this part fails
+        } finally {
+            // Reset UI regardless of what happens
             setIsUploading(false);
             setUploadProgress(null);
             setSelectedFile(null);
@@ -232,7 +222,7 @@ export default function DocumentsPage() {
     );
   };
   
-  if (isUserLoading || !user) {
+  if (isUserLoading || (!user && !isLoadingDocuments)) {
     return (
       <div className="flex flex-col min-h-screen">
         <Header />
@@ -367,13 +357,9 @@ export default function DocumentsPage() {
                                 </>
                             ) : (
                                 <>
-                                 <Dialog>
-                                    <DialogTrigger asChild>
-                                        <Button variant="ghost" size="icon" onClick={() => handleGenerateQrForSingle(doc)} disabled={!!editingDocId}>
-                                            <QrCode className="h-4 w-4" />
-                                        </Button>
-                                    </DialogTrigger>
-                                </Dialog>
+                                <Button variant="ghost" size="icon" onClick={() => handleGenerateQrForSingle(doc)} disabled={!!editingDocId}>
+                                    <QrCode className="h-4 w-4" />
+                                </Button>
 
                                 <Button variant="ghost" size="icon" onClick={() => handleEdit(doc)} disabled={!!editingDocId}>
                                     <FileEdit className="h-4 w-4" />
@@ -390,7 +376,7 @@ export default function DocumentsPage() {
                                         <AlertDialogDescription>
                                         This action cannot be undone. This will permanently delete your
                                         document and remove your data from our servers.
-                                        </AlertDialogDescription>
+                                        </spline>
                                     </AlertDialogHeader>
                                     <AlertDialogFooter>
                                         <AlertDialogCancel>Cancel</AlertDialogCancel>
