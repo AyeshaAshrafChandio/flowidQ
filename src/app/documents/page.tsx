@@ -2,7 +2,7 @@
 'use client';
 
 import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
-import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
+import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState, useRef } from 'react';
 import Header from '@/components/header';
@@ -113,17 +113,22 @@ export default function DocumentsPage() {
               userId: user.uid,
             };
             const docRef = await addDoc(collection(firestore, 'users', user.uid, 'documents'), docData);
-
-            // Once successful, remove from optimistic list. The real-time listener will add it to the main list.
-            setOptimisticUploads(prev => prev.filter(up => up.id !== optimisticId));
             
             // Silently trigger AI analysis in the background
             if (file.type.startsWith('image/')) {
-              const dataUri = await fileToDataURI(file);
-              const analysisResult = await analyzeDocument({ photoDataUri: dataUri });
-              // Silently update the doc with AI data in the background. Don't block UI.
-              await updateDoc(docRef, { aiAnalysis: analysisResult });
+                try {
+                    const dataUri = await fileToDataURI(file);
+                    const analysisResult = await analyzeDocument({ photoDataUri: dataUri });
+                    // Silently update the doc with AI data. Don't block UI.
+                    await updateDoc(docRef, { aiAnalysis: analysisResult });
+                } catch (aiError) {
+                    console.warn("AI analysis failed in the background:", aiError);
+                    // Don't show a toast for this, as it's a non-critical background task
+                }
             }
+
+            // Once successful, remove from optimistic list. The real-time listener will add it to the main list.
+            setOptimisticUploads(prev => prev.filter(up => up.id !== optimisticId));
 
         } catch (error) {
             console.error("Upload failed:", error);
@@ -256,13 +261,14 @@ export default function DocumentsPage() {
                                 <p className="text-xs font-medium">{upload.error}</p>
                               </div>
                            ) : (
-                             <p className="text-xs text-muted-foreground">Syncing...</p>
+                             <div className="flex items-center gap-2 mt-1">
+                                <Loader2 className="h-4 w-4 animate-spin text-primary/80" />
+                                <p className="text-xs text-muted-foreground">Syncing...</p>
+                             </div>
                            )}
                       </div>
                     </div>
-                    {upload.status === 'uploading' ? (
-                        <Loader2 className="h-5 w-5 text-primary animate-spin" />
-                    ) : (
+                    {upload.status === 'error' && (
                      <Button variant="ghost" size="icon" onClick={() => setOptimisticUploads(p => p.filter(up => up.id !== upload.id))}>
                         <X className="h-4 w-4 text-red-500" />
                      </Button>
