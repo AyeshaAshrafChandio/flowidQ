@@ -237,9 +237,12 @@
           "type": "string",
           "description": "Unique identifier for the AccessLog entity."
         },
-        "documentId": {
-          "type": "string",
-          "description": "Reference to Document. (Relationship: Document 1:N AccessLog)"
+        "documentIds": {
+          "type": "array",
+          "description": "Reference to one or more Documents. (Relationship: Document 1:N AccessLog)",
+          "items": {
+            "type": "string"
+          }
         },
         "userId": {
           "type": "string",
@@ -265,7 +268,7 @@
       },
       "required": [
         "id",
-        "documentId",
+        "documentIds",
         "userId",
         "accessTime",
         "ipAddress"
@@ -286,6 +289,10 @@
     "/users/{userId}/documents/{documentId}": {
       "schema": { "$ref": "#/entities/Document" },
       "description": "Stores documents owned by a specific user."
+    },
+    "/users/{userId}/accessLogs/{accessLogId}": {
+      "schema": { "$ref": "#/entities/AccessLog" },
+      "description": "Stores access logs for a user's documents."
     },
     "/queues/{queueId}": {
       "schema": { "$ref": "#/entities/Queue" },

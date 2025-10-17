@@ -1,8 +1,9 @@
+
 'use client';
 
 import { useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { getFirestore, doc, getDoc, DocumentData } from 'firebase/firestore';
+import { getFirestore, doc, getDoc, DocumentData, collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { Loader2, FileText, ShieldCheck, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -69,6 +70,22 @@ export default function VerifyComponent() {
                 if (docs.length === 0) {
                    throw new Error("No valid documents could be found for this QR code.");
                 }
+                
+                // Log the access
+                try {
+                    const accessLogColRef = collection(firestore, `users/${qrData.userId}/accessLogs`);
+                    await addDoc(accessLogColRef, {
+                        userId: qrData.userId,
+                        documentIds: qrData.documentIds,
+                        accessTime: serverTimestamp(),
+                        accessType: 'QR Code Scan',
+                        ipAddress: '0.0.0.0', // Placeholder
+                    });
+                } catch(e) {
+                    console.error("Failed to write access log:", e);
+                    // We don't block the user from seeing docs if logging fails
+                }
+
 
                 setDocuments(docs);
 
@@ -129,3 +146,5 @@ export default function VerifyComponent() {
         </Card>
     );
 }
+
+    
