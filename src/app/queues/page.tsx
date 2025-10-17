@@ -24,12 +24,17 @@ export default function QueuesPage() {
   const [userJoinedQueueIds, setUserJoinedQueueIds] = useState<string[]>([]);
 
   useEffect(() => {
-    // Wait until user loading is complete and we have a user and firestore instance
-    if (isUserLoading || !user || !firestore) {
-      // If loading is done but we have no user, stop the loading spinner.
-      if (!isUserLoading) {
+    if (isUserLoading) return; // Wait until user loading is complete
+    
+    if (!user) {
         setIsLoadingQueues(false);
-      }
+        // Optionally redirect to login if not logged in
+        // router.push('/login');
+        return;
+    }
+
+    if (!firestore) {
+      setIsLoadingQueues(false);
       return;
     }
 
@@ -44,14 +49,16 @@ export default function QueuesPage() {
             setQueues(queuesData);
 
             // 2. Check which queues the user has already joined
-            const joinedQueuesQuery = query(
-              collectionGroup(firestore, 'queueEntries'), 
-              where('userId', '==', user.uid),
-              where('status', '==', 'waiting')
-            );
-            const joinedSnapshot = await getDocs(joinedQueuesQuery);
-            const joinedIds = joinedSnapshot.docs.map(doc => doc.data().queueId);
-            setUserJoinedQueueIds(joinedIds);
+            if (user?.uid) {
+              const joinedQueuesQuery = query(
+                collectionGroup(firestore, 'queueEntries'), 
+                where('userId', '==', user.uid),
+                where('status', '==', 'waiting')
+              );
+              const joinedSnapshot = await getDocs(joinedQueuesQuery);
+              const joinedIds = joinedSnapshot.docs.map(doc => doc.data().queueId);
+              setUserJoinedQueueIds(joinedIds);
+            }
         } catch (error) {
             console.error("Error fetching queues data:", error);
             toast.error("Could not load queue information.");
@@ -61,7 +68,7 @@ export default function QueuesPage() {
     };
 
     fetchData();
-  }, [firestore, user, isUserLoading]);
+  }, [firestore, user, isUserLoading, router]);
 
 
   const handleJoinQueue = async (queue: any) => {
@@ -121,7 +128,7 @@ export default function QueuesPage() {
   };
 
 
-  if (isUserLoading || !user) {
+  if (isUserLoading || (!user && !isLoadingQueues)) {
     return (
       <div className="flex flex-col min-h-screen">
         <Header />

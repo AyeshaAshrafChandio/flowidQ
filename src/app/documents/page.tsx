@@ -103,7 +103,6 @@ export default function DocumentsPage() {
       },
       () => {
         const processPostUpload = async () => {
-            const toastId = toast.loading('Processing document...');
             let docRef;
             try {
               const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
@@ -128,7 +127,7 @@ export default function DocumentsPage() {
                   throw err; 
               });
     
-              toast.success('Document uploaded successfully ✅', { id: toastId });
+              toast.success('Document uploaded successfully ✅');
     
               if (file.type.startsWith('image/')) {
                 const aiToastId = toast.loading('AI is analyzing your document...');
@@ -160,9 +159,7 @@ export default function DocumentsPage() {
             } catch (error) {
                 console.error("Error during post-upload process:", error);
                 if (!String(error).includes('permission-error')) {
-                  toast.error('An error occurred while saving the document.', { id: toastId });
-                } else {
-                   toast.dismiss(toastId);
+                  toast.error('An error occurred while saving the document.');
                 }
             } finally {
                 setIsUploading(false);
@@ -476,5 +473,3 @@ export default function DocumentsPage() {
     </div>
   );
 }
-
-    
