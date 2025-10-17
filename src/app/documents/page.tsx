@@ -2,7 +2,7 @@
 'use client';
 
 import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
-import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState, useRef } from 'react';
 import Header from '@/components/header';
@@ -88,22 +88,16 @@ export default function DocumentsPage() {
       status: 'uploading',
     };
     
-    // Optimistically add to UI immediately
     setOptimisticUploads(prev => [newUpload, ...prev]);
 
-    // Perform the actual upload and DB operations in the background
     const performUpload = async () => {
         try {
             const storage = getStorage();
             const storageRef = ref(storage, `documents/${user.uid}/${Date.now()}_${file.name}`);
             
-            // 1. Upload file
             await uploadBytes(storageRef, file);
-            
-            // 2. Get download URL
             const downloadURL = await getDownloadURL(storageRef);
             
-            // 3. Save to Firestore
             const docData = {
               name: file.name,
               fileUrl: downloadURL,
@@ -114,26 +108,22 @@ export default function DocumentsPage() {
             };
             const docRef = await addDoc(collection(firestore, 'users', user.uid, 'documents'), docData);
             
-            // Silently trigger AI analysis in the background
+            // AI analysis runs silently in the background
             if (file.type.startsWith('image/')) {
-                try {
-                    const dataUri = await fileToDataURI(file);
-                    const analysisResult = await analyzeDocument({ photoDataUri: dataUri });
-                    // Silently update the doc with AI data. Don't block UI.
-                    await updateDoc(docRef, { aiAnalysis: analysisResult });
-                } catch (aiError) {
-                    console.warn("AI analysis failed in the background:", aiError);
-                    // Don't show a toast for this, as it's a non-critical background task
-                }
+                fileToDataURI(file).then(dataUri => {
+                    analyzeDocument({ photoDataUri: dataUri }).then(analysisResult => {
+                        updateDoc(docRef, { aiAnalysis: analysisResult });
+                    }).catch(aiError => {
+                        console.warn("Background AI analysis failed:", aiError);
+                    });
+                });
             }
 
-            // Once successful, remove from optimistic list. The real-time listener will add it to the main list.
             setOptimisticUploads(prev => prev.filter(up => up.id !== optimisticId));
 
         } catch (error) {
             console.error("Upload failed:", error);
             toast.error(`Upload of "${file.name}" failed.`);
-            // Update optimistic item to show error
             setOptimisticUploads(prev => prev.map(up => up.id === optimisticId ? { ...up, status: 'error', error: 'Upload failed' } : up));
         }
     };
@@ -144,14 +134,15 @@ export default function DocumentsPage() {
   const handleDelete = async (docId: string, storagePath: string) => {
     if (!user || !firestore) return;
     
-    const storage = getStorage();
-    const docRef = doc(firestore, 'users', user.uid, 'documents', docId);
-    const storageRef = ref(storage, storagePath);
     const toastId = toast.loading("Deleting document...");
-
     try {
+      const storage = getStorage();
+      const docRef = doc(firestore, 'users', user.uid, 'documents', docId);
+      const storageRef = ref(storage, storagePath);
+      
       await deleteDoc(docRef);
       await deleteObject(storageRef);
+
       toast.success('Document deleted.', { id: toastId });
       setSelectedDocs(prev => prev.filter(id => id !== docId));
     } catch (error) {
@@ -263,7 +254,7 @@ export default function DocumentsPage() {
                            ) : (
                              <div className="flex items-center gap-2 mt-1">
                                 <Loader2 className="h-4 w-4 animate-spin text-primary/80" />
-                                <p className="text-xs text-muted-foreground">Syncing...</p>
+                                <p className="text-xs text-muted-foreground">Uploading...</p>
                              </div>
                            )}
                       </div>
