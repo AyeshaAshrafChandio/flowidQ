@@ -22,6 +22,7 @@ import { analyzeDocument } from '@/ai/flows/document-analyzer-flow';
 interface OptimisticUpload {
   id: string; // A temporary, unique ID
   file: File;
+  error?: string;
 }
 
 export default function DocumentsPage() {
@@ -59,9 +60,11 @@ export default function DocumentsPage() {
   };
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      handleUpload(file);
+    const files = event.target.files;
+    if (files) {
+      for(const file of Array.from(files)) {
+        handleUpload(file);
+      }
     }
     // Reset the file input so the user can upload the same file again
     if (fileInputRef.current) {
@@ -76,7 +79,7 @@ export default function DocumentsPage() {
       return;
     }
     if (file.size > 10 * 1024 * 1024) { // 10MB limit
-      toast.error('File is too large. Maximum size is 10MB.');
+      toast.error(`File "${file.name}" is too large. Maximum size is 10MB.`);
       return;
     }
 
@@ -231,7 +234,7 @@ export default function DocumentsPage() {
               Upload
             </Button>
           </div>
-          <Input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept="image/*,.pdf,.doc,.docx" />
+          <Input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept="image/*,.pdf,.doc,.docx" multiple />
         </div>
 
         <Card className="glowing-border">
@@ -244,12 +247,12 @@ export default function DocumentsPage() {
                 
                 {/* Render optimistic uploads instantly */}
                 {optimisticUploads.map(upload => (
-                  <div key={upload.id} className="flex items-center justify-between p-3 rounded-lg bg-secondary/50 opacity-50">
+                  <div key={upload.id} className="flex items-center justify-between p-3 rounded-lg bg-secondary/50">
                     <div className="flex items-center gap-4 flex-grow">
                       <FileText className="h-6 w-6 text-primary" />
                       <div>
                           <p className="font-medium">{upload.file.name}</p>
-                          <p className="text-xs text-muted-foreground">Uploading now...</p>
+                          <p className="text-xs text-muted-foreground">Uploading...</p>
                       </div>
                     </div>
                     <Loader2 className="h-5 w-5 animate-spin text-primary" />
@@ -322,5 +325,4 @@ export default function DocumentsPage() {
       </Dialog>
     </div>
   );
-
-    
+}
