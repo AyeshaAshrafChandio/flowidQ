@@ -2,7 +2,7 @@
 'use client';
 
 import { useUser, useAuth } from '@/firebase';
-import { QrCode, LogOut, ShieldCheck } from 'lucide-react';
+import { QrCode, LogOut, ShieldCheck, History } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from './ui/button';
 import { useRouter } from 'next/navigation';
@@ -39,6 +39,12 @@ export default function Header() {
               </Link>
                <Link href="/queues">
                 <Button variant="ghost">Queues</Button>
+              </Link>
+              <Link href="/records">
+                <Button variant="ghost">
+                  <History className="mr-2 h-4 w-4" />
+                  Records
+                </Button>
               </Link>
               {user.email === ADMIN_EMAIL && (
                  <Link href="/admin">
