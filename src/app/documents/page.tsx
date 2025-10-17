@@ -17,9 +17,6 @@ import QRCode from 'qrcode.react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogClose } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { analyzeDocument } from '@/ai/flows/document-analyzer-flow';
-import { errorEmitter } from '@/firebase/error-emitter';
-import { FirestorePermissionError } from '@/firebase/errors';
-
 
 export default function DocumentsPage() {
   const { user, isUserLoading } = useUser();
@@ -35,6 +32,8 @@ export default function DocumentsPage() {
   const [generatedQrValue, setGeneratedQrValue] = useState<string | null>(null);
   const [editingDocId, setEditingDocId] = useState<string | null>(null);
   const [editingDocName, setEditingDocName] = useState('');
+  const [qrDialogData, setQrDialogData] = useState<{ value: string; name: string } | null>(null);
+
 
   const documentsQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
@@ -72,13 +71,13 @@ export default function DocumentsPage() {
       handleUpload(file);
     }
   };
-
+  
   const handleUpload = (file: File) => {
     if (!user || !firestore) {
       toast.error('You must be logged in to upload documents.');
       return;
     }
-    
+
     setIsUploading(true);
     setUploadProgress(0);
     setSelectedFile(file);
@@ -102,76 +101,53 @@ export default function DocumentsPage() {
         }
       },
       async () => {
-        // Upload completed successfully, now process the document
-        const toastId = toast.loading('Processing document...');
+        // --- This part runs AFTER the file is uploaded ---
+        const toastId = toast.loading('Finalizing document...');
         try {
           const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
           const documentsColRef = collection(firestore, 'users', user.uid, 'documents');
-          
+
           const docData = {
             name: file.name,
             fileUrl: downloadURL,
             storagePath: storageRef.fullPath,
             uploadDate: serverTimestamp(),
             category: file.type,
-            isEncrypted: true, 
+            isEncrypted: true,
             userId: user.uid,
           };
           
-          const docRef = await addDoc(documentsColRef, docData).catch(err => {
-              errorEmitter.emit('permission-error', new FirestorePermissionError({
-                  path: documentsColRef.path,
-                  operation: 'create',
-                  requestResourceData: docData
-              }));
-              throw err; 
-          });
+          // Add document to Firestore immediately
+          const docRef = await addDoc(documentsColRef, docData);
+          toast.success('Document uploaded! AI analysis running in background.', { id: toastId });
 
-          toast.success('Document uploaded successfully ✅', { id: toastId });
+          // Reset UI immediately for a faster feel
+          setIsUploading(false);
+          setUploadProgress(null);
+          setSelectedFile(null);
+          if (fileInputRef.current) fileInputRef.current.value = '';
 
-          // If it's an image, run AI analysis
+          // --- Run AI analysis in the background (don't wait for it) ---
           if (file.type.startsWith('image/')) {
-            const aiToastId = toast.loading('AI is analyzing your document...');
-            try {
-              const dataUri = await fileToDataURI(file);
-              const analysisResult = await analyzeDocument({ photoDataUri: dataUri });
-              
-              const aiData = { aiAnalysis: analysisResult };
-              await updateDoc(docRef, aiData).catch(err => {
-                errorEmitter.emit('permission-error', new FirestorePermissionError({
-                    path: docRef.path,
-                    operation: 'update',
-                    requestResourceData: aiData
-                }));
-                 throw err;
-              });
-              
-              toast.success(`AI detected: ${analysisResult.documentType}`, { id: aiToastId });
-
-            } catch (aiError) {
-              console.error("AI analysis failed:", aiError);
-              if (!String(aiError).includes('permission-error')) {
-                 toast.error('AI analysis failed, but your document was saved.', { id: aiToastId });
-              } else {
-                 toast.dismiss(aiToastId);
-              }
-            }
+            fileToDataURI(file).then(dataUri => {
+                analyzeDocument({ photoDataUri: dataUri }).then(analysisResult => {
+                    const aiData = { aiAnalysis: analysisResult };
+                    updateDoc(docRef, aiData); // Update doc in background
+                    toast.success(`AI detected: ${analysisResult.documentType}`);
+                }).catch(aiError => {
+                    console.error("AI analysis failed:", aiError);
+                    toast.error('AI analysis failed, but your document was saved.');
+                });
+            });
           }
         } catch (error) {
-            console.error("Error during post-upload process:", error);
-            if (!String(error).includes('permission-error')) {
-              toast.error('Failed to save document metadata.', { id: toastId });
-            } else {
-              toast.dismiss(toastId);
-            }
-        } finally {
-            // This block guarantees the UI is reset
+            console.error("Error saving document metadata:", error);
+            toast.error('Failed to save document metadata.', { id: toastId });
+            // Ensure UI is reset even if this part fails
             setIsUploading(false);
             setUploadProgress(null);
             setSelectedFile(null);
-            if (fileInputRef.current) {
-              fileInputRef.current.value = '';
-            }
+            if (fileInputRef.current) fileInputRef.current.value = '';
         }
       }
     );
@@ -186,25 +162,14 @@ export default function DocumentsPage() {
     const toastId = toast.loading("Deleting document...");
 
     try {
-      await deleteDoc(docRef).catch(err => {
-        errorEmitter.emit('permission-error', new FirestorePermissionError({
-            path: docRef.path,
-            operation: 'delete',
-        }));
-         throw err;
-      });
-
+      await deleteDoc(docRef);
       await deleteObject(storageRef);
 
       toast.success('Document deleted successfully.', { id: toastId });
       setSelectedDocs(prev => prev.filter(id => id !== docId));
     } catch (error) {
       console.error('Error deleting document:', error);
-       if (!String(error).includes('permission-error')) {
-        toast.error('Failed to delete document.', { id: toastId });
-      } else {
-        toast.dismiss(toastId);
-      }
+      toast.error('Failed to delete document.', { id: toastId });
     }
   };
   
@@ -225,49 +190,40 @@ export default function DocumentsPage() {
     }
     
     const docRef = doc(firestore, 'users', user.uid, 'documents', docId);
-    const updateData = { name: editingDocName };
     const toastId = toast.loading("Renaming document...");
     
     try {
-        await updateDoc(docRef, updateData).catch(error => {
-          errorEmitter.emit('permission-error', new FirestorePermissionError({
-              path: docRef.path,
-              operation: 'update',
-              requestResourceData: updateData
-          }));
-          throw error;
-        });
+        await updateDoc(docRef, { name: editingDocName });
         toast.success('Document renamed successfully.', { id: toastId });
         handleCancelEdit();
     } catch(error) {
-        if (!String(error).includes('permission-error')) {
-            toast.error('Failed to rename document.', { id: toastId });
-        } else {
-            toast.dismiss(toastId);
-        }
+        console.error('Error renaming document', error);
+        toast.error('Failed to rename document.', { id: toastId });
     }
   };
 
-  const handleGenerateQrCode = async () => {
-    if (selectedDocs.length === 0 || !user || !firestore) {
-      toast.error('Please select at least one document to generate a QR code.');
+  const handleGenerateQrCodeForMultiple = async () => {
+    if (selectedDocs.length === 0) {
+      toast.error('Please select at least one document.');
       return;
     }
-
-    try {
+    const qrValue = generateQrValue(selectedDocs);
+    setQrDialogData({ value: qrValue, name: `${selectedDocs.length} Documents` });
+  };
+  
+  const generateQrValue = (docIds: string[]) => {
+      if(!user) return '';
       const qrData = {
         userId: user.uid,
-        documentIds: selectedDocs,
+        documentIds: docIds,
         timestamp: Date.now(),
       };
-      
-      const qrValue = `${window.location.origin}/verify?data=${btoa(JSON.stringify(qrData))}`;
-      setGeneratedQrValue(qrValue);
-
-    } catch (error) {
-      console.error("Error generating QR code:", error);
-      toast.error('Failed to generate QR code.');
-    }
+      return `${window.location.origin}/verify?data=${btoa(JSON.stringify(qrData))}`;
+  }
+  
+  const handleGenerateQrForSingle = (doc: {id: string, name: string}) => {
+      const qrValue = generateQrValue([doc.id]);
+      setQrDialogData({ value: qrValue, name: doc.name });
   };
 
   const handleDocSelection = (docId: string) => {
@@ -294,33 +250,31 @@ export default function DocumentsPage() {
         <div className="flex justify-between items-center mb-8 gap-4">
           <h1 className="text-3xl font-bold">Document Wallet</h1>
           <div className="flex gap-2">
-             <Dialog onOpenChange={(isOpen) => !isOpen && setGeneratedQrValue(null)}>
-              <DialogTrigger asChild>
-                <Button onClick={handleGenerateQrCode} disabled={selectedDocs.length === 0 || isUploading}>
-                  <QrCode className="mr-2 h-4 w-4" />
-                  Generate QR Code
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-[425px]">
-                <DialogHeader>
-                  <DialogTitle>Share Documents</DialogTitle>
-                  <DialogDescription>
-                    Scan this QR code to securely access the selected documents.
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="flex items-center justify-center p-4">
-                  {generatedQrValue ? (
-                    <QRCode value={generatedQrValue} size={256} />
-                  ) : (
-                    <Loader2 className="h-16 w-16 animate-spin text-primary" />
-                  )}
-                </div>
-                 <DialogClose asChild>
-                    <Button type="button" variant="secondary" className="w-full">
-                      Done
-                    </Button>
-                  </DialogClose>
-              </DialogContent>
+             <Dialog open={!!qrDialogData} onOpenChange={(isOpen) => !isOpen && setQrDialogData(null)}>
+               <DialogTrigger asChild>
+                  <Button onClick={handleGenerateQrCodeForMultiple} disabled={selectedDocs.length === 0 || isUploading}>
+                    <QrCode className="mr-2 h-4 w-4" />
+                    Share Selected ({selectedDocs.length})
+                  </Button>
+               </DialogTrigger>
+                {qrDialogData && (
+                  <DialogContent className="sm:max-w-[425px]">
+                    <DialogHeader>
+                      <DialogTitle>Share: {qrDialogData.name}</DialogTitle>
+                      <DialogDescription>
+                        Scan this QR code to securely access the document(s).
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="flex items-center justify-center p-4">
+                      <QRCode value={qrDialogData.value} size={256} />
+                    </div>
+                    <DialogClose asChild>
+                        <Button type="button" variant="secondary" className="w-full">
+                          Done
+                        </Button>
+                    </DialogClose>
+                  </DialogContent>
+                )}
             </Dialog>
             <Button onClick={handleFileSelect} disabled={isUploading}>
               {isUploading ? (
@@ -360,7 +314,7 @@ export default function DocumentsPage() {
                 <CardHeader>
                     <CardTitle>Your Documents</CardTitle>
                     <CardDescription>
-                    Select, edit, and manage your documents. Generate a QR code to share.
+                    Select documents to share, or generate a QR code for a single file.
                     </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -413,6 +367,14 @@ export default function DocumentsPage() {
                                 </>
                             ) : (
                                 <>
+                                 <Dialog>
+                                    <DialogTrigger asChild>
+                                        <Button variant="ghost" size="icon" onClick={() => handleGenerateQrForSingle(doc)} disabled={!!editingDocId}>
+                                            <QrCode className="h-4 w-4" />
+                                        </Button>
+                                    </DialogTrigger>
+                                </Dialog>
+
                                 <Button variant="ghost" size="icon" onClick={() => handleEdit(doc)} disabled={!!editingDocId}>
                                     <FileEdit className="h-4 w-4" />
                                 </Button>
@@ -458,3 +420,5 @@ export default function DocumentsPage() {
     </div>
   );
 }
+
+    
