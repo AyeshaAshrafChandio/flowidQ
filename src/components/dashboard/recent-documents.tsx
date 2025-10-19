@@ -1,0 +1,76 @@
+
+"use client";
+
+import Link from "next/link";
+import { ArrowUpRight } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { getDocuments } from "@/lib/data";
+import { useState, useEffect } from "react";
+import type { Document } from "@/lib/types";
+
+export function RecentDocuments() {
+  const [documents, setDocuments] = useState<Document[]>([]);
+
+  useEffect(() => {
+    setDocuments(getDocuments());
+  }, []);
+
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center">
+        <div className="grid gap-2">
+            <CardTitle>Recent Documents</CardTitle>
+            <CardDescription>
+                A list of your most recently uploaded documents.
+            </CardDescription>
+        </div>
+        <Button asChild size="sm" className="ml-auto gap-1">
+            <Link href="/documents">
+            View All
+            <ArrowUpRight className="h-4 w-4" />
+            </Link>
+        </Button>
+      </CardHeader>
+      <CardContent>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Document</TableHead>
+              <TableHead className="hidden sm:table-cell">Type</TableHead>
+              <TableHead className="text-right">Upload Date</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {documents.slice(-4).reverse().map((doc) => (
+              <TableRow key={doc.id}>
+                <TableCell>
+                  <div className="font-medium">{doc.name}</div>
+                </TableCell>
+                <TableCell className="hidden sm:table-cell">
+                  <Badge variant="outline">{doc.type}</Badge>
+                </TableCell>
+                <TableCell className="text-right">{doc.uploadDate}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </CardContent>
+    </Card>
+  );
+}
